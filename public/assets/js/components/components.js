@@ -55,7 +55,7 @@ var ComponentRegistry = (function() {
         name: 'EnhancedCheckbox',
         type: 'enhancedCheckbox',
         group: 'custom',
-        path: 'components/custom/EnhancedCheckbox.js'
+        path: 'components/custom/enhancedCheckbox.js'
       },
       {
         name: 'DistrictDropdown',
