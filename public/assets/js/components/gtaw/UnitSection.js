@@ -46,8 +46,7 @@
                           type: 'textfield', 
                           input: true, 
                           tableView: true, 
-                          customDefaultValue: 'value = getCookie(component.key);', 
-                          customConditional: 'setCookie(component.key, value, 30);' 
+                          saveToLocalStorage: true,
                         }
                       ],
                       width: 4,
@@ -66,8 +65,7 @@
                           type: 'textfield', 
                           input: true, 
                           tableView: true, 
-                          customDefaultValue: 'value = getCookie(component.key);', 
-                          customConditional: 'setCookie(component.key, value, 30);' 
+                          saveToLocalStorage: true,
                         }
                       ],
                       width: 4,
@@ -86,8 +84,7 @@
                           type: 'textfield', 
                           input: true, 
                           tableView: true, 
-                          customDefaultValue: 'value = getCookie(component.key);', 
-                          customConditional: 'setCookie(component.key, value, 30);' 
+                          saveToLocalStorage: true,
                         }
                       ],
                       size: 'md',
