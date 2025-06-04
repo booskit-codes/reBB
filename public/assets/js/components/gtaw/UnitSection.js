@@ -11,7 +11,7 @@
       // Define the builder info as a static getter
       static get builderInfo() {
         return {
-          title: 'Unit Section (with Browser Cookies)',
+          title: 'Unit Section (with localStorage)',
           group: 'gtaw',
           icon: 'person',
           weight: 0,

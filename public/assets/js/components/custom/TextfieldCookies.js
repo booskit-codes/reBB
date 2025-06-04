@@ -11,9 +11,9 @@
     // Define the builder info as a static getter
     static get builderInfo() {
       return {
-        title: 'Textfield (Cookies)',
+        title: 'Textfield (localStorage)',
         group: 'custom',
-        icon: 'person',
+        icon: 'terminal',
         weight: 10,
         schema: TextfieldCookiesComponent.schema()
       };
@@ -23,10 +23,9 @@
     static schema() {
       return TextFieldComponent.schema({
         type: 'textfieldCookies',
-        label: 'Textfield with Cookies',
+        label: 'Textfield with localStorage',
         key: 'textfieldCookies',
-        customDefaultValue: 'value = getCookie(component.key);',
-        customConditional: 'setCookie(component.key, value, 30);'
+        saveToLocalStorage: true,
       });
     }
 

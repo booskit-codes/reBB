@@ -8,4 +8,4 @@
  */
 
 // Define the base path for the application
-define('APP_VERSION', 'v1.5.11a');
+define('APP_VERSION', 'v1.5.11b');
