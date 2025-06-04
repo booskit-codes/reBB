@@ -153,6 +153,32 @@ function createFormWithSchema() {
             console.log('Form created successfully');
             // Store form instance globally so we can access it in event handlers
             formInstance = form;
+
+            // START - Load values from local storage
+            try {
+                if (form && typeof form.everyComponent === 'function') {
+                    form.everyComponent(function(component) {
+                        if (component.component && component.component.saveToLocalStorage === true && component.key) {
+                            const savedValue = localStorage.getItem(component.key);
+                            if (savedValue !== null) {
+                                // Attempt to parse if it looks like JSON, otherwise use as is
+                                let valueToSet;
+                                try {
+                                    valueToSet = JSON.parse(savedValue);
+                                } catch (e) {
+                                    valueToSet = savedValue;
+                                }
+                                component.setValue(valueToSet);
+                                console.log(`Loaded value for ${component.key} from local storage:`, valueToSet);
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Error loading from local storage:", e);
+            }
+            // END - Load values from local storage
+
             setupFormEventHandlers(form);
         })
         .catch(function(error) {
@@ -276,6 +302,29 @@ function setupFormEventHandlers(form) {
         trackFormUsage(true);
         form.emit('submitDone');
     });
+
+    // START - Save values to local storage on change
+    form.on('change', function(event) {
+        try {
+            if (event.changed && event.changed.instance && event.changed.instance.component &&
+                event.changed.instance.component.saveToLocalStorage === true && event.changed.component.key) {
+
+                const componentKey = event.changed.component.key;
+                const value = event.changed.value; // Value of the component that changed
+
+                // For selectboxes, event.changed.value might be an object like { "option": true/false }
+                // For multi-select, it might be an array of selected values.
+                // JSON.stringify will handle these cases correctly.
+                const valueToStore = JSON.stringify(value);
+
+                localStorage.setItem(componentKey, valueToStore);
+                console.log(`Saved value for ${componentKey} to local storage:`, valueToStore);
+            }
+        } catch (e) {
+            console.error("Error saving to local storage on change:", e);
+        }
+    });
+    // END - Save values to local storage on change
 }
 
 // Process template with data

@@ -64,6 +64,34 @@
             }
         }
         
+        // START - ADD CUSTOM FUNCTIONS TAB
+        // Find the main tabs component in the edit form
+        const mainTabsComponent = editForm.components.find(c => c.key === 'tabs');
+        if (mainTabsComponent && mainTabsComponent.components) {
+            // Define the new Custom Functions tab
+            const customFunctionsTab = {
+                label: "Custom Functions",
+                key: "customFunctions",
+                weight: 50, // Aim to place it after common tabs like API, Data, Display
+                components: [
+                    // Add the "Save to Local Storage" checkbox here
+                    {
+                        type: 'checkbox',
+                        input: true,
+                        key: 'saveToLocalStorage',
+                        label: 'Save to Local Storage',
+                        tooltip: "When enabled, the component's value will be saved to local storage and automatically loaded.",
+                        defaultValue: false
+                        // No specific weight needed here as it's the first component in this tab
+                    }
+                ]
+            };
+
+            // Add the new tab to the tabs array
+            mainTabsComponent.components.push(customFunctionsTab);
+        }
+        // END - ADD CUSTOM FUNCTIONS TAB
+
         return editForm;
     };
     
