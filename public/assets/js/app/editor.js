@@ -60,6 +60,20 @@
                     
                     // Insert the disable wildcard checkbox after the preserve key checkbox
                     apiPanel.components.splice(keyFieldIndex + 2, 0, disableWildcardCheckbox);
+
+                    // Create the Save to Local Storage checkbox
+                    const saveToLocalStorageCheckbox = {
+                        type: 'checkbox',
+                        input: true,
+                        key: 'saveToLocalStorage',
+                        label: 'Save to Local Storage',
+                        tooltip: 'When enabled, the component\'s value will be saved to local storage using the component\'s key.',
+                        weight: apiPanel.components[keyFieldIndex].weight + 3, // Position after disable wildcard checkbox
+                        defaultValue: false
+                    };
+
+                    // Insert the save to local storage checkbox after the disable wildcard checkbox
+                    apiPanel.components.splice(keyFieldIndex + 3, 0, saveToLocalStorageCheckbox);
                 }
             }
         }
@@ -98,6 +112,7 @@
                             // Check if Preserve Key already exists
                             const preserveKeyExists = apiTab.components.some(c => c.key === 'uniqueKey');
                             const disableWildcardExists = apiTab.components.some(c => c.key === 'disableWildcard');
+                            const saveToLocalStorageExists = apiTab.components.some(c => c.key === 'saveToLocalStorage');
                             
                             if (!preserveKeyExists) {
                                 // Add the Preserve Key checkbox
@@ -131,6 +146,24 @@
                                 const preserveKeyIndex = apiTab.components.findIndex(c => c.key === 'uniqueKey');
                                 const insertIndex = preserveKeyIndex !== -1 ? preserveKeyIndex + 1 : keyFieldIndex + 1;
                                 apiTab.components.splice(insertIndex, 0, disableWildcardCheckbox);
+                            }
+
+                            if (!saveToLocalStorageExists) {
+                                // Add the Save to Local Storage checkbox (after Disable Wildcard)
+                                const saveToLocalStorageCheckbox = {
+                                    type: 'checkbox',
+                                    input: true,
+                                    key: 'saveToLocalStorage',
+                                    label: 'Save to Local Storage',
+                                    tooltip: 'When enabled, the component\'s value will be saved to local storage using the component\'s key.',
+                                    weight: apiTab.components[keyFieldIndex].weight + 3,
+                                    defaultValue: false
+                                };
+
+                                // Insert after the disable wildcard checkbox
+                                const disableWildcardIndex = apiTab.components.findIndex(c => c.key === 'disableWildcard');
+                                const insertIndexSave = disableWildcardIndex !== -1 ? disableWildcardIndex + 1 : (preserveKeyIndex !== -1 ? preserveKeyIndex + 2 : keyFieldIndex + 2);
+                                apiTab.components.splice(insertIndexSave, 0, saveToLocalStorageCheckbox);
                             }
                         }
                     }

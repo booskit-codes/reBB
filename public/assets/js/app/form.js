@@ -153,6 +153,30 @@ function createFormWithSchema() {
             console.log('Form created successfully');
             // Store form instance globally so we can access it in event handlers
             formInstance = form;
+
+            // Load values from local storage
+            if (form && form.form && form.form.components) {
+                form.form.components.forEach(component => {
+                    // Check if the component has a key and the saveToLocalStorage flag is true
+                    if (component && component.saveToLocalStorage && component.key) {
+                        try {
+                            const savedValue = localStorage.getItem(component.key);
+                            if (savedValue !== null) {
+                                // Get the component instance from the form
+                                const componentInstance = form.getComponent(component.key);
+                                if (componentInstance) {
+                                    // Set the value of the component
+                                    componentInstance.setValue(savedValue);
+                                    console.log(`Loaded value for ${component.key} from local storage:`, savedValue);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`Error loading value for ${component.key} from local storage:`, e);
+                        }
+                    }
+                });
+            }
+            
             setupFormEventHandlers(form);
         })
         .catch(function(error) {
@@ -273,6 +297,25 @@ function setupFormEventHandlers(form) {
             templateTitleContainer.style.display = 'block';
         }
         
+        // Save values to local storage
+        if (formInstance && formInstance.form && formInstance.form.components) {
+            formInstance.form.components.forEach(component => {
+                // Check if the component schema has a key and the saveToLocalStorage flag is true
+                if (component && component.saveToLocalStorage && component.key) {
+                    const valueToSave = submission.data[component.key];
+                    // Only save if the value is actually present in the submission data
+                    if (valueToSave !== undefined) { 
+                        try {
+                            localStorage.setItem(component.key, valueToSave);
+                            console.log(`Saved value for ${component.key} to local storage:`, valueToSave);
+                        } catch (e) {
+                            console.warn(`Error saving value for ${component.key} to local storage:`, e);
+                        }
+                    }
+                }
+            });
+        }
+
         trackFormUsage(true);
         form.emit('submitDone');
     });

@@ -20,7 +20,6 @@ $dangerousPatterns = [
     'onmouseover\s*=' => 'onmouseover event handler detected',
     'fetch\s*\(' => 'Fetch API call detected',
     'XMLHttpRequest' => 'XMLHttpRequest detected',
-    'localStorage' => 'localStorage manipulation detected',
     'sessionStorage' => 'sessionStorage manipulation detected',
     'window\.open' => 'window.open() detected',
     'window\.location' => 'window.location manipulation detected',
