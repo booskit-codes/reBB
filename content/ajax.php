@@ -340,10 +340,39 @@ if ($requestType === 'schema') {
         
         $currentUser = auth()->getUser();
         $formCreator = isset($existingFormData['createdBy']) ? $existingFormData['createdBy'] : null;
-        
-        if ($formCreator !== $currentUser['_id'] && $currentUser['role'] !== 'admin') {
-            logAttempt('Unauthorized edit attempt for form: ' . $editingFormId . ' by user: ' . $currentUser['username']);
-            echo json_encode(['success' => false, 'error' => 'You do not have permission to edit this form.']);
+        $canSaveChanges = false;
+
+        if (isset($existingFormData['organization_id']) && !empty($existingFormData['organization_id'])) {
+            // Organizational form
+            $dbPath = ROOT_DIR . '/db';
+            try {
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $membership = $orgMembersStore->findOneBy([
+                    ['organization_id', '=', $existingFormData['organization_id']],
+                    'AND',
+                    ['user_id', '=', $currentUser['_id']]
+                ]);
+                if ($membership && in_array($membership['organization_role'], ['organization_owner', 'organization_admin', 'organization_member'])) {
+                    $canSaveChanges = true;
+                }
+            } catch (\Exception $e) {
+                logAttempt("Error checking org membership in ajax.php for edit: " . $e->getMessage());
+            }
+        } else {
+            // Personal form
+            if ($formCreator === $currentUser['_id']) {
+                $canSaveChanges = true;
+            }
+        }
+
+        // System admin can always edit
+        if (auth()->hasRole(Auth::ROLE_ADMIN)) {
+            $canSaveChanges = true;
+        }
+
+        if (!$canSaveChanges) {
+            logAttempt('Unauthorized save attempt for form: ' . $editingFormId . ' by user: ' . $currentUser['username']);
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to save changes to this form.']);
             exit;
         }
 
