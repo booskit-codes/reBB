@@ -25,6 +25,21 @@ class Auth {
     private $isInitialized = false;
     private $currentUser = null;
     private $sessionLifetime = 86400; // Default 24 hours
+
+    // Define roles and their hierarchy (lowest to highest)
+    const ROLE_GUEST = 'guest'; // Theoretical, not stored for logged-out users
+    const ROLE_ORGANIZATION_USER = 'organization_user';
+    const ROLE_USER = 'user';
+    const ROLE_EDITOR = 'editor'; // Assuming 'editor' exists or might exist
+    const ROLE_ADMIN = 'admin';
+
+    private $roleHierarchy = [
+        self::ROLE_GUEST,
+        self::ROLE_ORGANIZATION_USER,
+        self::ROLE_USER,
+        self::ROLE_EDITOR,
+        self::ROLE_ADMIN,
+    ];
     
     /**
      * Get singleton instance
@@ -305,6 +320,75 @@ class Auth {
             }
         }
         
+        return true;
+    }
+
+    /**
+     * Get the numerical level of a role.
+     * Higher number means higher privilege.
+     *
+     * @param string $roleName
+     * @return int|false Role level or false if role not found
+     */
+    private function getRoleLevel($roleName) {
+        $level = array_search($roleName, $this->roleHierarchy);
+        return $level === false ? false : $level;
+    }
+
+    /**
+     * Check if the current user's role meets or exceeds a minimum required role.
+     *
+     * @param string $minRoleName The minimum role required (e.g., Auth::ROLE_USER)
+     * @return bool True if user meets the requirement, false otherwise.
+     */
+    public function hasMinRole($minRoleName) {
+        if (!$this->isLoggedIn()) {
+            // If guest is the minimum requirement, and user is not logged in, they are effectively a guest.
+            // However, for roles higher than guest, a non-logged-in user doesn't meet criteria.
+            return $this->getRoleLevel($minRoleName) === $this->getRoleLevel(self::ROLE_GUEST);
+        }
+
+        $currentUserLevel = $this->getRoleLevel($this->currentUser['role']);
+        $requiredLevel = $this->getRoleLevel($minRoleName);
+
+        if ($currentUserLevel === false || $requiredLevel === false) {
+            // Invalid role name provided or user has an unrecognized role
+            return false;
+        }
+
+        return $currentUserLevel >= $requiredLevel;
+    }
+
+    /**
+     * Middleware to require a minimum role level.
+     * Redirects if the user does not meet the role requirement.
+     *
+     * @param string $minRoleName The minimum role required (e.g., Auth::ROLE_USER)
+     * @param string $redirectUrl URL to redirect to if not authorized
+     * @return bool True if authorized, otherwise script exits.
+     */
+    public function requireMinRole($minRoleName, $redirectUrl = 'login') {
+        if (!$this->isLoggedIn()) {
+            $_SESSION['auth_redirect'] = $_SERVER['REQUEST_URI'];
+            header("Location: " . site_url($redirectUrl));
+            exit;
+        }
+
+        if (!$this->hasMinRole($minRoleName)) {
+            // User is logged in but does not have sufficient privileges.
+            // Redirect to home or a 'permission denied' page might be better than login.
+            // For now, using home.
+            // You might want to create a specific 'access-denied.php' view.
+            http_response_code(403); // Forbidden
+            // For simplicity, redirecting to home. A dedicated error page is better.
+            $message = "You do not have sufficient permissions to access this page. Required role: " . $minRoleName . ", Your role: " . $this->currentUser['role'];
+            // It's better to have a proper error page rendering function.
+            // For now, a simple echo and exit.
+            // view('errors/403', ['message' => $message]); // Assuming you might have such a view
+            echo "<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>" . htmlspecialchars($message) . "</p><p><a href='" . site_url('') . "'>Go to Homepage</a></p></body></html>";
+            exit;
+        }
+
         return true;
     }
     

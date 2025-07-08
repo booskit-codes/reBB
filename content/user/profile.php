@@ -7,7 +7,8 @@
  */
 
 // Require authentication before processing anything else
-auth()->requireAuth('login');
+auth()->requireAuth('login'); // Ensures user is logged in
+auth()->requireMinRole(Auth::ROLE_USER); // Ensures user is at least a 'user'
 
 // Since we've passed the auth check, we can safely get the current user
 $currentUser = auth()->getUser();

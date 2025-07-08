@@ -297,8 +297,23 @@ ob_start();
                                         <tr>
                                             <td class="truncate"><?php echo htmlspecialchars($user['username']); ?></td>
                                             <td>
-                                                <span class="badge bg-<?php echo $user['role'] === 'admin' ? 'danger' : 'success'; ?>">
-                                                    <?php echo htmlspecialchars($user['role']); ?>
+                                                <?php
+                                                    $role = $user['role'];
+                                                    $badgeClass = 'secondary'; // Default badge
+                                                    if ($role === Auth::ROLE_ADMIN) {
+                                                        $badgeClass = 'danger';
+                                                    } elseif ($role === Auth::ROLE_EDITOR) {
+                                                        $badgeClass = 'warning';
+                                                    } elseif ($role === Auth::ROLE_USER) {
+                                                        $badgeClass = 'success';
+                                                    } elseif ($role === Auth::ROLE_ORGANIZATION_USER) {
+                                                        $badgeClass = 'info';
+                                                    } elseif ($role === 'trusted') { // Assuming 'trusted' is a role
+                                                        $badgeClass = 'primary';
+                                                    }
+                                                ?>
+                                                <span class="badge bg-<?php echo $badgeClass; ?>">
+                                                    <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $role))); ?>
                                                 </span>
                                             </td>
                                             <td>
@@ -365,10 +380,11 @@ ob_start();
                             <div class="mb-3">
                                 <label for="role" class="form-label">Role</label>
                                 <select class="form-select" id="role" name="role" <?php echo $editingUser['_id'] === $currentUser['_id'] ? 'disabled' : ''; ?>>
-                                    <option value="user" <?php echo $editingUser['role'] === 'user' ? 'selected' : ''; ?>>User</option>
-                                    <option value="trusted" <?php echo $editingUser['role'] === 'trusted' ? 'selected' : ''; ?>>Trusted</option>
-                                    <option value="editor" <?php echo $editingUser['role'] === 'editor' ? 'selected' : ''; ?>>Editor</option>
-                                    <option value="admin" <?php echo $editingUser['role'] === 'admin' ? 'selected' : ''; ?>>Admin</option>
+                                    <option value="<?php echo Auth::ROLE_ORGANIZATION_USER; ?>" <?php echo $editingUser['role'] === Auth::ROLE_ORGANIZATION_USER ? 'selected' : ''; ?>>Organization User</option>
+                                    <option value="<?php echo Auth::ROLE_USER; ?>" <?php echo $editingUser['role'] === Auth::ROLE_USER ? 'selected' : ''; ?>>User</option>
+                                    <option value="trusted" <?php echo $editingUser['role'] === 'trusted' ? 'selected' : ''; ?>>Trusted</option> <!-- Assuming 'trusted' is a defined role -->
+                                    <option value="<?php echo Auth::ROLE_EDITOR; ?>" <?php echo $editingUser['role'] === Auth::ROLE_EDITOR ? 'selected' : ''; ?>>Editor</option>
+                                    <option value="<?php echo Auth::ROLE_ADMIN; ?>" <?php echo $editingUser['role'] === Auth::ROLE_ADMIN ? 'selected' : ''; ?>>Admin</option>
                                 </select>
                                 <?php if ($editingUser['_id'] === $currentUser['_id']): ?>
                                     <div class="form-text">You cannot change your own role.</div>
@@ -404,10 +420,11 @@ ob_start();
                             <div class="mb-3">
                                 <label for="role" class="form-label">Role</label>
                                 <select class="form-select" id="role" name="role">
-                                    <option value="user">User</option>
-                                    <option value="trusted">Trusted</option>
-                                    <option value="editor">Editor</option>
-                                    <option value="admin">Admin</option>
+                                    <option value="<?php echo Auth::ROLE_ORGANIZATION_USER; ?>">Organization User</option>
+                                    <option value="<?php echo Auth::ROLE_USER; ?>" selected>User (Default)</option>
+                                    <option value="trusted">Trusted</option> <!-- Assuming 'trusted' is a defined role -->
+                                    <option value="<?php echo Auth::ROLE_EDITOR; ?>">Editor</option>
+                                    <option value="<?php echo Auth::ROLE_ADMIN; ?>">Admin</option>
                                 </select>
                             </div>
                             
@@ -452,10 +469,18 @@ ob_start();
                         </ul>
                         
                         <p><strong>Regular users</strong> can:</p>
-                        <ul>
+                        <ul class="mb-3">
                             <li>Create and manage their own forms</li>
                             <li>Use the form builder</li>
                             <li>Create custom short links (limited by Max Links setting)</li>
+                            <li>Create and manage one organization</li>
+                        </ul>
+
+                        <p><strong>Organization users</strong> can:</p>
+                        <ul>
+                            <li>Only access forms and features related to their organization.</li>
+                            <li>Cannot create personal forms or access general user profile sections.</li>
+                            <li>(Future: Will be created/managed by Organization Owners/Admins).</li>
                         </ul>
                     </div>
                 </div>
