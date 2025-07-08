@@ -269,6 +269,12 @@ if(ENABLE_AUTH) {
     any('/analytics', function() {
         view('admin/analytics');
     });
+
+    // Manage Organizations page
+    any('/admin/organizations', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN, 'login');
+        view('admin/organizations');
+    });
 }
 
 // ===================================

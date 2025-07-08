@@ -51,11 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     exit;
                 }
             }
-            
+
             // Check for a previously intended redirect URL, otherwise use the role-based default
             $redirect = isset($_SESSION['auth_redirect']) ? $_SESSION['auth_redirect'] : $defaultRedirect;
             unset($_SESSION['auth_redirect']); // Clear the stored redirect
-            
+
             header("Location: " . $redirect);
             exit;
         } else {
@@ -75,12 +75,12 @@ $csrfToken = auth()->generateCsrfToken();
                 <h3 class="mb-0">Login</h3>
             </div>
             <div class="card-body">
-                <?php 
+                <?php
                 if (isset($_SESSION['login_error'])) {
                     $error = $_SESSION['login_error'];
                     unset($_SESSION['login_error']);
                 }
-                if ($error): 
+                if ($error):
                 ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>

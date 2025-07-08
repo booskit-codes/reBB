@@ -21,7 +21,7 @@ ob_start();
                 <a href="<?php echo site_url('login'); ?>" class="btn btn-outline-light">
                     <i class="bi bi-person"></i> Login
                 </a>
-                <?php else: 
+                <?php else:
                     $user = auth()->getUser();
                     $username = htmlspecialchars($user['username']);
                     if ($user['role'] === Auth::ROLE_ORGANIZATION_USER):

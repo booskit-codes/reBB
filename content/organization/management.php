@@ -488,7 +488,7 @@ ob_start();
                                                 </td>
                                                 <td><?php echo $member['added_at'] ? date('Y-m-d H:i', $member['added_at']) : 'N/A'; ?></td>
                                                 <td class="member-actions">
-                                                    <?php 
+                                                    <?php
                                                     $canEditTarget = false;
                                                     $canRemoveTarget = false;
 
@@ -507,7 +507,7 @@ ob_start();
                                                     }
                                                     ?>
                                                     <?php if ($canEditTarget): ?>
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary edit-member-role-btn" 
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary edit-member-role-btn"
                                                                 data-bs-toggle="modal" data-bs-target="#editRoleModal"
                                                                 data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
                                                                 data-username="<?php echo htmlspecialchars($member['username']); ?>"
@@ -731,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             document.getElementById('editRole_userId').value = userId;
             document.getElementById('editRole_username').textContent = username;
-            
+
             const roleSelect = document.getElementById('editRole_newRole');
             roleSelect.innerHTML = ''; // Clear existing options
 

@@ -560,7 +560,21 @@ ob_start();
             </div>
         </div>
         
-        <div class="col-md-6 mb-3 mb-md-0">
+        <div class="col-md-4 mb-3 mb-md-0"> <!-- Adjusted to col-md-4 to fit three cards -->
+            <div class="card h-100">
+                <div class="card-header">
+                    <h4 class="mb-0">Organization Management</h4>
+                </div>
+                <div class="card-body">
+                    <p>Oversee and manage all organizations:</p>
+                    <a href="<?php echo site_url('admin/organizations'); ?>" class="btn btn-warning">
+                        <i class="bi bi-diagram-3-fill"></i> Manage Organizations
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3 mb-md-0"> <!-- Adjusted to col-md-4 -->
             <div class="card h-100">
                 <div class="card-header">
                     <h4 class="mb-0">System Logs</h4>
