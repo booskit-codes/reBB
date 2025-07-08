@@ -12,6 +12,38 @@ $currentUser = auth()->getUser(); // Get current admin user
 // Initialize variables
 $actionMessage = '';
 $actionMessageType = 'info';
+
+// Logging function for organization admin actions
+function logOrganizationAdminAction(string $action, bool $success = true, ?string $orgId = null, ?string $targetUserId = null, array $details = []) {
+    $logFile = STORAGE_DIR . '/logs/organization_activity.log';
+    $logsDir = dirname($logFile);
+
+    if (!is_dir($logsDir)) {
+        mkdir($logsDir, 0755, true);
+    }
+
+    $timestamp = date('Y-m-d H:i:s');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+    $adminUser = auth()->getUser();
+    $adminUsername = $adminUser ? $adminUser['username'] : 'UnknownAdmin';
+    $status = $success ? 'SUCCESS' : 'FAILED';
+
+    $logEntry = "[$timestamp] [$status] [Admin:$adminUsername] [IP:$ip]";
+    if ($orgId) {
+        $logEntry .= " [OrgID:$orgId]";
+    }
+    if ($targetUserId) {
+        $logEntry .= " [TargetUserID:$targetUserId]";
+    }
+    $logEntry .= " Action: " . $action;
+    if (!empty($details)) {
+        $logEntry .= " Details: " . json_encode($details);
+    }
+    $logEntry .= PHP_EOL;
+
+    @file_put_contents($logFile, $logEntry, FILE_APPEND);
+}
+
 $allOrganizations = [];
 $viewingOrganization = null;
 $viewingOrganizationMembers = [];
@@ -119,6 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             } else {
                 $updated = $organizationsStore->updateById($orgIdToEdit, ['organization_name' => $newOrgName, 'updated_at' => time()]);
                 if ($updated) {
+                    logOrganizationAdminAction("Updated organization name", true, (string)$orgIdToEdit, null, ['old_name' => $orgEntry['organization_name'], 'new_name' => $newOrgName]);
                     $actionMessage = "Organization name updated successfully to '{$newOrgName}'.";
                     $actionMessageType = 'success';
                     // Refresh data if viewing this org or the list
@@ -150,12 +183,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 } else {
                     $actionMessage = "Failed to update organization name.";
                     $actionMessageType = 'danger';
+                    logOrganizationAdminAction("Failed to update organization name", false, (string)$orgIdToEdit, null, ['new_name' => $newOrgName]);
                 }
             }
         } catch (\Exception $e) {
             $actionMessage = "Error editing organization details: " . $e->getMessage();
             $actionMessageType = 'danger';
             error_log("Admin Edit Organization Details Error: " . $e->getMessage());
+            logOrganizationAdminAction("Error editing organization details", false, (string)$orgIdToEdit, null, ['error' => $e->getMessage()]);
         }
     }
 }
@@ -205,6 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     // Proceed with deletion
                     $deletedMember = $orgMembersStore->deleteById($memberEntry['_id']);
                     if ($deletedMember) {
+                        logOrganizationAdminAction("Removed member from organization", true, (string)$organizationId, (string)$userToRemoveId, ['removed_role' => $memberEntry['organization_role']]);
                         $actionMessage = "Member removed from organization successfully.";
                         $actionMessageType = 'success';
 
@@ -227,6 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         }
 
                     } else {
+                        logOrganizationAdminAction("Failed to remove member from organization", false, (string)$organizationId, (string)$userToRemoveId);
                         $actionMessage = "Failed to remove member from organization.";
                         $actionMessageType = 'danger';
                     }
@@ -236,6 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $actionMessage = "Error removing member: " . $e->getMessage();
             $actionMessageType = 'danger';
             error_log("Admin Remove Member Error: " . $e->getMessage());
+            logOrganizationAdminAction("Error removing member", false, (string)$organizationId, (string)$userToRemoveId, ['error' => $e->getMessage()]);
         }
     }
 }
@@ -286,14 +324,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 if ($actionMessageType !== 'warning' && $actionMessageType !== 'danger') { // Proceed if no warning/error yet
                     $updated = $orgMembersStore->updateById($memberEntry['_id'], ['organization_role' => $newOrganizationRole]);
                     if ($updated) {
+                        logOrganizationAdminAction("Updated member role", true, (string)$organizationId, (string)$userToEditId, ['old_role' => $memberEntry['organization_role'], 'new_role' => $newOrganizationRole]);
                         $actionMessage = "Member's organization role updated successfully.";
                         $actionMessageType = 'success';
                         // Refresh data for the view if currently viewing this org
                         if (isset($_GET['view_org_id']) && (int)$_GET['view_org_id'] === $organizationId) {
-                            // This will trigger re-fetch of $viewingOrganizationMembers below
-                            $viewingOrganizationMembers = []; // Clear to force re-fetch
+                            $viewingOrganizationMembers = [];
                         }
                     } else {
+                        logOrganizationAdminAction("Failed to update member role", false, (string)$organizationId, (string)$userToEditId, ['new_role' => $newOrganizationRole]);
                         $actionMessage = "Failed to update member's role.";
                         $actionMessageType = 'danger';
                     }
@@ -303,6 +342,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $actionMessage = "Error editing member role: " . $e->getMessage();
             $actionMessageType = 'danger';
             error_log("Admin Edit Member Role Error: " . $e->getMessage());
+            logOrganizationAdminAction("Error editing member role", false, (string)$organizationId, (string)$userToEditId, ['error' => $e->getMessage()]);
         }
     }
 }
@@ -340,9 +380,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_organization']
             $deletedOrg = $organizationsStore->deleteBy(['_id', '=', $orgIdToDelete]); // deleteBy returns number of affected rows
 
             if ($deletedOrg) {
+                logOrganizationAdminAction("Deleted organization", true, (string)$orgIdToDelete);
                 $actionMessage = "Organization ID '{$orgIdToDelete}' and all associated member links have been deleted.";
                 $actionMessageType = 'success';
-                error_log("Admin: Successfully deleted organization ID: " . $orgIdToDelete);
+                error_log("Admin: Successfully deleted organization ID: " . $orgIdToDelete); // Keep existing error_log for system level
                 // Refresh all organizations list as the current list might be stale
                 $allOrganizations = []; // Clear it first
                 $rawOrganizations = $organizationsStore->findAll(['created_at' => 'desc']);
@@ -363,15 +404,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_organization']
                 }
 
             } else {
+                logOrganizationAdminAction("Failed to delete organization", false, (string)$orgIdToDelete);
                 $actionMessage = "Failed to delete organization ID '{$orgIdToDelete}'. It might have already been deleted or does not exist.";
                 $actionMessageType = 'warning';
-                error_log("Admin: Failed to delete organization ID: " . $orgIdToDelete . " from organizations store.");
+                error_log("Admin: Failed to delete organization ID: " . $orgIdToDelete . " from organizations store."); // Keep system log
             }
 
         } catch (\Exception $e) {
             $actionMessage = "Error deleting organization: " . $e->getMessage();
             $actionMessageType = 'danger';
-            error_log("Admin Delete Organization Error: " . $e->getMessage());
+            error_log("Admin Delete Organization Error: " . $e->getMessage()); // Keep system log
+            logOrganizationAdminAction("Error deleting organization", false, (string)$orgIdToDelete, null, ['error' => $e->getMessage()]);
         }
     }
 }
