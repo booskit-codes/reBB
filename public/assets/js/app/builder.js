@@ -584,7 +584,8 @@
         isEditMode = typeof isEditMode !== 'undefined' && isEditMode;
         const editingForm = document.getElementById('editingForm')?.value;
         const formWidth = parseInt(document.getElementById('formWidthInput').value, 10);
-        const formType = document.getElementById('formType')?.value || ''; // Read the formType
+        const formType = document.getElementById('formType')?.value || ''; // Old field, potentially for specific type handling
+        const formContext = document.getElementById('formContext')?.value || ''; // New field for context
 
         try {
             const response = await fetch('ajax', {
@@ -605,7 +606,8 @@
                     editMode: isEditMode,
                     editingForm: editingForm,
                     builder: 'standard',
-                    form_type: formType // Add form_type to the payload
+                    form_type: formType, // Keep if it serves other purposes
+                    form_context: formContext // Add form_context to the payload
                 })
             });
 

@@ -156,6 +156,9 @@ ob_start();
             <a href="<?php echo site_url('lists'); ?>" class="btn btn-outline-primary me-2">
                 <i class="bi bi-collection"></i> Form Lists
             </a>
+            <a href="<?php echo site_url('organization/management'); ?>" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-diagram-3"></i> Organization Management
+            </a>
             <a href="<?php echo site_url('account'); ?>" class="btn btn-outline-info me-2">
                 <i class="bi bi-gear"></i> Account Settings
             </a>
@@ -248,11 +251,6 @@ ob_start();
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="links-tab" data-bs-toggle="tab" data-bs-target="#links-content" type="button" role="tab" aria-controls="links-content" aria-selected="false">
                 <i class="bi bi-link-45deg"></i> Custom Links
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="organization-tab" data-bs-toggle="tab" data-bs-target="#organization-content" type="button" role="tab" aria-controls="organization-content" aria-selected="false">
-                <i class="bi bi-diagram-3"></i> Organization Management
             </button>
         </li>
     </ul>
@@ -410,20 +408,6 @@ ob_start();
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Organization Management Tab -->
-        <div class="tab-pane fade" id="organization-content" role="tabpanel" aria-labelledby="organization-tab">
-            <?php
-            // Attempt to include the organization content.
-            // This approach is simple. For more complex scenarios, consider a routing or controller mechanism.
-            $org_content_path = ROOT_DIR . '/content/organization/organization.php';
-            if (file_exists($org_content_path)) {
-                include $org_content_path;
-            } else {
-                echo '<div class="alert alert-danger">Organization management content is currently unavailable.</div>';
-            }
-            ?>
         </div>
     </div>
     

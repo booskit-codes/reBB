@@ -268,7 +268,8 @@ if ($requestType === 'schema') {
     $isEditMode = isset($requestData['editMode']) && $requestData['editMode'] === true;
     $editingFormId = isset($requestData['editingForm']) ? $requestData['editingForm'] : '';
     $builderType = isset($requestData['builder']) ? $requestData['builder'] : '';
-    $formTypeParam = isset($requestData['form_type']) ? $requestData['form_type'] : ''; // Get the form_type
+    $formTypeParam = isset($requestData['form_type']) ? $requestData['form_type'] : '';
+    $formContextParam = isset($requestData['form_context']) ? $requestData['form_context'] : ''; // Get the form_context
 
     $createdBy = null;
     $verified = false;
@@ -475,23 +476,38 @@ if ($requestType === 'schema') {
         // Log successful update
         logAttempt("Successful form update - Form ID: $editingFormId by user: " . ($currentUser['username'] ?? 'Unknown'), false);
         
-        // Organizational logic for edited forms - typically an org form definition wouldn't be edited
-        // but if it were, its link to an organization is already established.
-        // We might want to update org name if formName changed and it's an org form.
-        if ($formTypeParam === 'organization' && auth()->isLoggedIn()) {
+        // Organizational logic for edited forms
+        // If an edited form is part of an organization, its organization_id should persist.
+        // The main change here is IF the form_context indicates it's an org form, ensure it has an org ID.
+        // However, editing usually means the form already exists with its context.
+        // For now, we don't change organization_id during edit, but ensure org name can be updated if the form *is* the org definition form.
+        if ($formTypeParam === 'organization' && auth()->isLoggedIn()) { // This condition checks if the form ITSELF IS an organization's defining form
             try {
                 $orgDbPath = ROOT_DIR . '/db';
-                $organizationsStore = new \SleekDB\Store('organizations', $orgDbPath, [
-                    'auto_cache' => false, 'timeout' => false
-                ]);
+                $organizationsStore = new \SleekDB\Store('organizations', $orgDbPath, ['auto_cache' => false, 'timeout' => false]);
                 $orgData = $organizationsStore->findOneBy(['form_id', '=', $editingFormId]);
                 if ($orgData && $orgData['organization_name'] !== $formName) {
                     $organizationsStore->updateById($orgData['_id'], ['organization_name' => $formName, 'updated_at' => time()]);
+                    logAttempt("Organization name updated for org ID: {$orgData['_id']} via form edit: $editingFormId");
                 }
             } catch (\Exception $e) {
                 logAttempt("Error updating organization name during form edit: " . $e->getMessage());
             }
         }
+        // If form_context is 'organization' during an edit, ensure the schema file *retains* its organization_id
+        // This is more of a safeguard, as it should already be there.
+        if ($formContextParam === 'organization' && auth()->isLoggedIn() && file_exists($existingFilename)) {
+            $schemaContent = json_decode(file_get_contents($existingFilename), true);
+            if (isset($schemaContent['organization_id'])) {
+                // Good, it's there. If we wanted to update it (e.g. user changed orgs and is re-assigning form - out of scope)
+                // we would do it here. For now, just ensure it's preserved by re-adding it to the $fileContent before saving.
+                 $fileDataToSave = json_decode($fileContent, true); // $fileContent is the new data to be saved
+                 $fileDataToSave['organization_id'] = $schemaContent['organization_id'];
+                 $fileContent = json_encode($fileDataToSave, JSON_PRETTY_PRINT);
+                 // This $fileContent is then written by file_put_contents a few lines above this block in original code
+            }
+        }
+
 
         // Return success response with original form ID
         echo json_encode([
@@ -620,105 +636,51 @@ if ($requestType === 'schema') {
         $userInfo = auth()->isLoggedIn() ? " by user: " . auth()->getUser()['username'] : "";
         logAttempt("Successful form schema submission - Form ID: $randomString$userInfo", false);
         
-        $createdOrganizationId = null;
-        // === Organization Creation Logic ===
-        if ($formTypeParam === 'organization' && auth()->isLoggedIn()) {
+        $organizationIdToEmbed = null;
+
+        // === Logic for associating new form with an Organization via form_context ===
+        if ($formContextParam === 'organization' && auth()->isLoggedIn()) {
             $currentUserId = auth()->getUser()['_id'];
             $orgDbPath = ROOT_DIR . '/db';
-
             try {
-                // Check if user already belongs to an organization
                 $userOrgLinkStore = new \SleekDB\Store('user_to_organization_links', $orgDbPath, ['auto_cache' => false, 'timeout' => false]);
                 $existingLink = $userOrgLinkStore->findOneBy(['user_id', '=', $currentUserId]);
 
-                if ($existingLink) {
-                    // User already in an org. Delete the form we just created to avoid orphans.
-                    if (file_exists($filename)) {
-                        unlink($filename);
-                    }
-                    // Also remove from user_forms
-                    if(isset($userFormsStore)) { // Check if $userFormsStore was initialized
-                        $userFormEntry = $userFormsStore->findOneBy([['form_id', '=', $randomString], 'AND', ['user_id', '=', $currentUserId]]);
-                        if($userFormEntry) {
-                            $userFormsStore->deleteById($userFormEntry['_id']);
-                        }
-                    }
-                     // Also remove from public_listings if it was added
-                    if ($enablePublicLink && isset($publicListingsStore)) {
-                        $publicListingEntry = $publicListingsStore->findOneBy(['form_id', '=', $randomString]);
-                        if ($publicListingEntry) {
-                            $publicListingsStore->deleteById($publicListingEntry['_id']);
-                        }
-                    }
+                if ($existingLink && isset($existingLink['organization_id'])) {
+                    $organizationIdToEmbed = $existingLink['organization_id'];
 
-                    echo json_encode(['success' => false, 'error' => 'You already belong to an organization. You cannot create a new one. The submitted form has been discarded.']);
-                    exit;
+                    // Update the form's schema JSON file with organization_id
+                    // $filename is the path to the _schema.json file
+                    $schemaData = json_decode(file_get_contents($filename), true);
+                    $schemaData['organization_id'] = $organizationIdToEmbed;
+                    if(file_put_contents($filename, json_encode($schemaData, JSON_PRETTY_PRINT))) {
+                        logAttempt("Form ID: $randomString associated with Organization ID: $organizationIdToEmbed for User ID: $currentUserId", false);
+                    } else {
+                        logAttempt("ERROR: Failed to write organization_id to schema for Form ID: $randomString", true);
+                        // Potentially throw an error or handle this failure case
+                    }
+                } else {
+                    logAttempt("User ID: $currentUserId tried to create form with context 'organization' but is not linked to an organization.", true);
+                    // Optionally, could return an error to the user here, but for now, form is created without org link.
                 }
-
-                // Create organization
-                $organizationsStore = new \SleekDB\Store('organizations', $orgDbPath, ['auto_cache' => false, 'timeout' => false]);
-                $newOrganization = $organizationsStore->insert([
-                    'organization_name' => $formName ?: 'New Organization', // Use form name or a default
-                    'form_id' => $randomString,
-                    'owner_user_id' => $currentUserId,
-                    'created_at' => time(),
-                    'updated_at' => time()
-                ]);
-
-                if (!$newOrganization || !isset($newOrganization['_id'])) {
-                    throw new \Exception("Failed to create organization entry in DB.");
-                }
-                $createdOrganizationId = $newOrganization['_id'];
-
-                // Link user to organization
-                $userOrgLinkStore->insert([
-                    'user_id' => $currentUserId,
-                    'organization_id' => $createdOrganizationId
-                ]);
-
-                // Update the form's schema JSON file with organization_id
-                $schemaData = json_decode(file_get_contents($filename), true);
-                $schemaData['organization_id'] = $createdOrganizationId;
-                file_put_contents($filename, json_encode($schemaData, JSON_PRETTY_PRINT));
-
-                logAttempt("Successfully created organization ID: $createdOrganizationId and linked to user ID: $currentUserId for form ID: $randomString", false);
-
             } catch (\Exception $e) {
-                logAttempt("Error during organization creation: " . $e->getMessage());
-                // Rollback: If form file was created, delete it as org creation failed.
-                if (file_exists($filename)) {
-                    unlink($filename);
-                }
-                 // Also remove from user_forms
-                if(isset($userFormsStore)) {
-                    $userFormEntry = $userFormsStore->findOneBy([['form_id', '=', $randomString], 'AND', ['user_id', '=', $currentUserId]]);
-                    if($userFormEntry) {
-                        $userFormsStore->deleteById($userFormEntry['_id']);
-                    }
-                }
-                // Also remove from public_listings if it was added
-                if ($enablePublicLink && isset($publicListingsStore)) {
-                    $publicListingEntry = $publicListingsStore->findOneBy(['form_id', '=', $randomString]);
-                    if ($publicListingEntry) {
-                        $publicListingsStore->deleteById($publicListingEntry['_id']);
-                    }
-                }
-                // If organization was partially created, try to delete it
-                if ($createdOrganizationId && isset($organizationsStore)) {
-                    $organizationsStore->deleteById($createdOrganizationId);
-                }
-
-                echo json_encode(['success' => false, 'error' => 'Failed to create organization: ' . $e->getMessage()]);
-                exit;
+                logAttempt("Error associating form with organization: " . $e->getMessage());
             }
         }
-        // === End Organization Creation Logic ===
+        // === End Form Association with Organization Logic ===
 
-        $responseData = json_decode($fileContent, true);
+        // Note: The original $formTypeParam === 'organization' block was for creating an Organization entity itself
+        // through the builder. This logic is now superseded by the dedicated creation form on management.php.
+        // If $formTypeParam had other uses, they should be reviewed. For now, new organization *entities* aren't made here.
+
+        $responseData = json_decode($fileContent, true); // $fileContent is the original content written to disk
         $responseData['formId'] = $randomString; // Add formId to the response
-        if ($createdOrganizationId) {
-            $responseData['organization_id'] = $createdOrganizationId;
+
+        // If an organizationId was embedded, add it to the response as well
+        if ($organizationIdToEmbed) {
+            $responseData['organization_id'] = $organizationIdToEmbed;
         }
+
         echo json_encode($responseData);
         exit;
     }

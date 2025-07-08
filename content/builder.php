@@ -348,7 +348,8 @@ ob_start();
     </div>
 
     <div id='button-container'>
-        <input type="hidden" id="formType" value="<?php echo isset($_GET['type']) ? htmlspecialchars($_GET['type']) : ''; ?>">
+        <input type="hidden" id="formType" value="<?php echo isset($_GET['type']) ? htmlspecialchars($_GET['type']) : ''; // Retaining for now, though new logic uses formContext ?>">
+        <input type="hidden" id="formContext" value="<?php echo isset($_GET['form_context']) ? htmlspecialchars($_GET['form_context']) : ''; ?>">
         <?php if ($editMode && $isOwnForm): ?>
             <input type="hidden" id="editingForm" value="<?php echo htmlspecialchars($_GET['f']); ?>">
             <input type="hidden" id="editMode" value="true">

@@ -201,6 +201,12 @@ if(ENABLE_AUTH) {
     any('/lists', function() {
         view('user/lists');
     });
+
+    // Organization Management page
+    any('/organization/management', function() {
+        auth()->requireAuth('login'); // Ensure user is logged in
+        view('organization/management');
+    });
 }
 
 // ===================================
