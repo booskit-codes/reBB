@@ -348,6 +348,7 @@ ob_start();
     </div>
 
     <div id='button-container'>
+        <input type="hidden" id="formType" value="<?php echo isset($_GET['type']) ? htmlspecialchars($_GET['type']) : ''; ?>">
         <?php if ($editMode && $isOwnForm): ?>
             <input type="hidden" id="editingForm" value="<?php echo htmlspecialchars($_GET['f']); ?>">
             <input type="hidden" id="editMode" value="true">

@@ -250,6 +250,11 @@ ob_start();
                 <i class="bi bi-link-45deg"></i> Custom Links
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="organization-tab" data-bs-toggle="tab" data-bs-target="#organization-content" type="button" role="tab" aria-controls="organization-content" aria-selected="false">
+                <i class="bi bi-diagram-3"></i> Organization Management
+            </button>
+        </li>
     </ul>
     
     <!-- Tab Content -->
@@ -405,6 +410,20 @@ ob_start();
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Organization Management Tab -->
+        <div class="tab-pane fade" id="organization-content" role="tabpanel" aria-labelledby="organization-tab">
+            <?php
+            // Attempt to include the organization content.
+            // This approach is simple. For more complex scenarios, consider a routing or controller mechanism.
+            $org_content_path = ROOT_DIR . '/content/organization/organization.php';
+            if (file_exists($org_content_path)) {
+                include $org_content_path;
+            } else {
+                echo '<div class="alert alert-danger">Organization management content is currently unavailable.</div>';
+            }
+            ?>
         </div>
     </div>
     

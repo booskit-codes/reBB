@@ -584,6 +584,7 @@
         isEditMode = typeof isEditMode !== 'undefined' && isEditMode;
         const editingForm = document.getElementById('editingForm')?.value;
         const formWidth = parseInt(document.getElementById('formWidthInput').value, 10);
+        const formType = document.getElementById('formType')?.value || ''; // Read the formType
 
         try {
             const response = await fetch('ajax', {
@@ -603,7 +604,8 @@
                     formStyle: formStyle,
                     editMode: isEditMode,
                     editingForm: editingForm,
-                    builder: 'standard'
+                    builder: 'standard',
+                    form_type: formType // Add form_type to the payload
                 })
             });
 
