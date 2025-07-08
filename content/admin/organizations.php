@@ -97,6 +97,216 @@ if (isset($_GET['view_org_id'])) {
     }
 }
 
+// --- Admin: Handle Edit Organization Details (Name) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'admin_edit_organization_details') {
+    auth()->requireRole(Auth::ROLE_ADMIN);
+    $orgIdToEdit = isset($_POST['organization_id_to_edit']) ? (int)$_POST['organization_id_to_edit'] : null;
+    $newOrgName = isset($_POST['new_organization_name']) ? trim($_POST['new_organization_name']) : null;
+
+    if (!$orgIdToEdit || empty($newOrgName)) {
+        $actionMessage = "Missing Organization ID or new name for editing details.";
+        $actionMessageType = 'danger';
+    } else {
+        try {
+            if (!$organizationsStore) {
+                $dbPath = ROOT_DIR . '/db';
+                $organizationsStore = new \SleekDB\Store('organizations', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+            }
+            $orgEntry = $organizationsStore->findById($orgIdToEdit);
+            if (!$orgEntry) {
+                $actionMessage = "Organization not found for editing.";
+                $actionMessageType = 'danger';
+            } else {
+                $updated = $organizationsStore->updateById($orgIdToEdit, ['organization_name' => $newOrgName, 'updated_at' => time()]);
+                if ($updated) {
+                    $actionMessage = "Organization name updated successfully to '{$newOrgName}'.";
+                    $actionMessageType = 'success';
+                    // Refresh data if viewing this org or the list
+                    if (isset($_GET['view_org_id']) && (int)$_GET['view_org_id'] === $orgIdToEdit) {
+                        $viewingOrganization = $organizationsStore->findById($orgIdToEdit); // Re-fetch
+                         // Also re-fetch owner username for the specific org being viewed
+                        $ownerUser = $usersStore->findById($viewingOrganization['owner_user_id']);
+                        $viewingOrganization['owner_username'] = ($ownerUser && isset($ownerUser['username'])) ? $ownerUser['username'] : 'Unknown';
+                        $viewingOrganization['created_at_formatted'] = isset($viewingOrganization['created_at']) ? date('Y-m-d H:i', $viewingOrganization['created_at']) : 'N/A';
+                    }
+                    // Refresh allOrganizations list
+                    $allOrganizations = []; // Clear it first
+                    $rawOrganizations = $organizationsStore->findAll(['created_at' => 'desc']);
+                     foreach ($rawOrganizations as $org) {
+                        $ownerName = 'Unknown';
+                        if (isset($org['owner_user_id']) && $usersStore) {
+                            $ownerUser = $usersStore->findById($org['owner_user_id']);
+                            if ($ownerUser && isset($ownerUser['username'])) {
+                                $ownerName = $ownerUser['username'];
+                            }
+                        }
+                        $memberCount = $orgMembersStore ? $orgMembersStore->count(['organization_id', '=', $org['_id']]) : 0;
+                        $allOrganizations[] = array_merge($org, [
+                            'owner_username' => $ownerName,
+                            'member_count' => $memberCount,
+                            'created_at_formatted' => isset($org['created_at']) ? date('Y-m-d H:i', $org['created_at']) : 'N/A',
+                        ]);
+                    }
+                } else {
+                    $actionMessage = "Failed to update organization name.";
+                    $actionMessageType = 'danger';
+                }
+            }
+        } catch (\Exception $e) {
+            $actionMessage = "Error editing organization details: " . $e->getMessage();
+            $actionMessageType = 'danger';
+            error_log("Admin Edit Organization Details Error: " . $e->getMessage());
+        }
+    }
+}
+
+// --- Admin: Handle Remove Organization Member ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'admin_remove_org_member') {
+    auth()->requireRole(Auth::ROLE_ADMIN);
+    $userToRemoveId = isset($_POST['user_to_remove_id']) ? (int)$_POST['user_to_remove_id'] : null;
+    $organizationId = isset($_POST['organization_id_for_remove']) ? (int)$_POST['organization_id_for_remove'] : null; // Matched to frontend form
+
+    if (!$userToRemoveId || !$organizationId) {
+        $actionMessage = "Missing data for removing member.";
+        $actionMessageType = 'danger';
+    } else {
+        try {
+            if (!$orgMembersStore || !$userOrgStore || !$usersStore) { // Ensure stores are initialized
+                $dbPath = ROOT_DIR . '/db';
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $userOrgStore = new \SleekDB\Store('user_to_organization_links', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $usersStore = new \SleekDB\Store('users', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+            }
+
+            $memberEntry = $orgMembersStore->findOneBy([
+                ['user_id', '=', $userToRemoveId],
+                'AND',
+                ['organization_id', '=', $organizationId]
+            ]);
+
+            if (!$memberEntry) {
+                $actionMessage = "Member not found in this organization for removal.";
+                $actionMessageType = 'danger';
+            } else {
+                // Prevent removing the last owner
+                if ($memberEntry['organization_role'] === 'organization_owner') {
+                    $ownerCount = $orgMembersStore->count([
+                        ['organization_id', '=', $organizationId],
+                        'AND',
+                        ['organization_role', '=', 'organization_owner']
+                    ]);
+                    if ($ownerCount <= 1) {
+                        $actionMessage = "Cannot remove the last organization owner. Assign another owner first or delete the organization.";
+                        $actionMessageType = 'warning';
+                    }
+                }
+
+                if ($actionMessageType !== 'warning' && $actionMessageType !== 'danger') {
+                    // Proceed with deletion
+                    $deletedMember = $orgMembersStore->deleteById($memberEntry['_id']);
+                    if ($deletedMember) {
+                        $actionMessage = "Member removed from organization successfully.";
+                        $actionMessageType = 'success';
+
+                        // If the user's global role is ROLE_ORGANIZATION_USER, remove their primary link to this org.
+                        $userGlobalData = $usersStore->findById($userToRemoveId);
+                        if ($userGlobalData && $userGlobalData['role'] === Auth::ROLE_ORGANIZATION_USER) {
+                            $userOrgLink = $userOrgStore->findOneBy([
+                                ['user_id', '=', $userToRemoveId],
+                                'AND',
+                                ['organization_id', '=', $organizationId]
+                            ]);
+                            if ($userOrgLink) {
+                                $userOrgStore->deleteById($userOrgLink['_id']);
+                                $actionMessage .= " User's primary link to this organization was also removed.";
+                            }
+                        }
+                         // Refresh data for the view
+                        if (isset($_GET['view_org_id']) && (int)$_GET['view_org_id'] === $organizationId) {
+                            $viewingOrganizationMembers = []; // Clear to force re-fetch
+                        }
+
+                    } else {
+                        $actionMessage = "Failed to remove member from organization.";
+                        $actionMessageType = 'danger';
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            $actionMessage = "Error removing member: " . $e->getMessage();
+            $actionMessageType = 'danger';
+            error_log("Admin Remove Member Error: " . $e->getMessage());
+        }
+    }
+}
+
+// --- Admin: Handle Edit Organization Member Role ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'admin_edit_org_member_role') {
+    auth()->requireRole(Auth::ROLE_ADMIN); // Double-check admin privileges for this action block
+    $userToEditId = isset($_POST['user_to_edit_id']) ? (int)$_POST['user_to_edit_id'] : null;
+    $organizationId = isset($_POST['organization_id_for_edit']) ? (int)$_POST['organization_id_for_edit'] : null; // Matched to frontend form
+    $newOrganizationRole = $_POST['new_organization_role'] ?? null;
+
+    if (!$userToEditId || !$organizationId || !$newOrganizationRole) {
+        $actionMessage = "Missing data for editing member role.";
+        $actionMessageType = 'danger';
+    } elseif (!in_array($newOrganizationRole, ['organization_owner', 'organization_admin', 'organization_member'])) {
+        $actionMessage = "Invalid new role specified.";
+        $actionMessageType = 'danger';
+    } else {
+        try {
+            if (!$orgMembersStore) { // Ensure store is initialized
+                $dbPath = ROOT_DIR . '/db';
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+            }
+
+            $memberEntry = $orgMembersStore->findOneBy([
+                ['user_id', '=', $userToEditId],
+                'AND',
+                ['organization_id', '=', $organizationId]
+            ]);
+
+            if (!$memberEntry) {
+                $actionMessage = "Member not found in this organization.";
+                $actionMessageType = 'danger';
+            } else {
+                // Prevent changing the role of the last owner to a non-owner role
+                if ($memberEntry['organization_role'] === 'organization_owner' && $newOrganizationRole !== 'organization_owner') {
+                    $ownerCount = $orgMembersStore->count([
+                        ['organization_id', '=', $organizationId],
+                        'AND',
+                        ['organization_role', '=', 'organization_owner']
+                    ]);
+                    if ($ownerCount <= 1) {
+                        $actionMessage = "Cannot change the role of the last owner to a non-owner role. Assign another owner first.";
+                        $actionMessageType = 'warning';
+                    }
+                }
+
+                if ($actionMessageType !== 'warning' && $actionMessageType !== 'danger') { // Proceed if no warning/error yet
+                    $updated = $orgMembersStore->updateById($memberEntry['_id'], ['organization_role' => $newOrganizationRole]);
+                    if ($updated) {
+                        $actionMessage = "Member's organization role updated successfully.";
+                        $actionMessageType = 'success';
+                        // Refresh data for the view if currently viewing this org
+                        if (isset($_GET['view_org_id']) && (int)$_GET['view_org_id'] === $organizationId) {
+                            // This will trigger re-fetch of $viewingOrganizationMembers below
+                            $viewingOrganizationMembers = []; // Clear to force re-fetch
+                        }
+                    } else {
+                        $actionMessage = "Failed to update member's role.";
+                        $actionMessageType = 'danger';
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            $actionMessage = "Error editing member role: " . $e->getMessage();
+            $actionMessageType = 'danger';
+            error_log("Admin Edit Member Role Error: " . $e->getMessage());
+        }
+    }
+}
+
 // --- Handle Organization Deletion ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_organization']) && isset($_POST['organization_id_to_delete'])) {
     $orgIdToDelete = $_POST['organization_id_to_delete'];
@@ -205,11 +415,17 @@ ob_start();
                 <p><strong>Name:</strong> <?php echo htmlspecialchars($viewingOrganization['organization_name']); ?></p>
                 <p><strong>Owner:</strong> <?php echo htmlspecialchars($viewingOrganization['owner_username']); ?> (ID: <?php echo htmlspecialchars($viewingOrganization['owner_user_id']); ?>)</p>
                 <p><strong>Created At:</strong> <?php echo htmlspecialchars($viewingOrganization['created_at_formatted']); ?></p>
-                <!-- Add Edit/Delete buttons for org itself later -->
+                <button type="button" class="btn btn-sm btn-outline-secondary admin-edit-org-details-btn mt-2"
+                        data-bs-toggle="modal" data-bs-target="#adminEditOrgDetailsModal"
+                        data-org-id="<?php echo htmlspecialchars($viewingOrganization['_id']); ?>"
+                        data-org-name="<?php echo htmlspecialchars($viewingOrganization['organization_name']); ?>">
+                    <i class="bi bi-pencil-square"></i> Edit Name
+                </button>
+                <!-- Add Delete button for org itself later -->
             </div>
         </div>
 
-        <div class="card">
+        <div class="card mt-4">
             <div class="card-header">
                 <h4 class="mb-0">Members (<?php echo count($viewingOrganizationMembers); ?>)</h4>
                 <!-- Add "Link Existing User" button later -->
@@ -239,8 +455,21 @@ ob_start();
                                         </td>
                                         <td><?php echo htmlspecialchars($member['added_at_formatted']); ?></td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-secondary" disabled>Edit Role</button> <!-- Placeholder -->
-                                            <button class="btn btn-sm btn-outline-danger" disabled>Remove</button> <!-- Placeholder -->
+                                            <button type="button" class="btn btn-sm btn-outline-secondary admin-edit-member-role-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#adminEditMemberRoleModal"
+                                                    data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
+                                                    data-username="<?php echo htmlspecialchars($member['username']); ?>"
+                                                    data-current-role="<?php echo htmlspecialchars($member['organization_role']); ?>"
+                                                    data-organization-id="<?php echo htmlspecialchars($viewingOrganization['_id']); // Pass org ID for the form ?>">
+                                                <i class="bi bi-pencil-square"></i> Edit Role
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger admin-remove-member-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#adminRemoveMemberModal"
+                                                    data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
+                                                    data-username="<?php echo htmlspecialchars($member['username']); ?>"
+                                                    data-organization-id="<?php echo htmlspecialchars($viewingOrganization['_id']); ?>">
+                                                <i class="bi bi-trash"></i> Remove
+                                            </button>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -285,7 +514,12 @@ ob_start();
                                             <a href="?view_org_id=<?php echo htmlspecialchars($org['_id']); ?>" class="btn btn-sm btn-info">
                                                 <i class="bi bi-eye"></i> View/Manage
                                             </a>
-                                        <button class="btn btn-sm btn-outline-secondary" disabled>Edit</button> <!-- Placeholder for future edit functionality -->
+                                        <button type="button" class="btn btn-sm btn-outline-secondary admin-edit-org-details-btn"
+                                                data-bs-toggle="modal" data-bs-target="#adminEditOrgDetailsModal"
+                                                data-org-id="<?php echo htmlspecialchars($org['_id']); ?>"
+                                                data-org-name="<?php echo htmlspecialchars($org['organization_name']); ?>">
+                                            <i class="bi bi-pencil-square"></i> Edit
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-outline-danger delete-org-btn"
                                                 data-bs-toggle="modal" data-bs-target="#deleteOrgModal"
                                                 data-org-id="<?php echo htmlspecialchars($org['_id']); ?>"
@@ -330,6 +564,91 @@ ob_start();
     </div>
 </div>
 
+<!-- Admin Edit Member Role Modal -->
+<div class="modal fade" id="adminEditMemberRoleModal" tabindex="-1" aria-labelledby="adminEditMemberRoleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo site_url('admin/organizations?view_org_id=' . htmlspecialchars($viewingOrganization['_id'] ?? '')); ?>">
+                <input type="hidden" name="action" value="admin_edit_org_member_role">
+                <input type="hidden" name="user_to_edit_id" id="adminEditMember_userId">
+                <input type="hidden" name="organization_id_for_edit" id="adminEditMember_orgId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adminEditMemberRoleModalLabel">Edit Role for <span id="adminEditMember_username"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Current Organization: <?php echo htmlspecialchars($viewingOrganization['organization_name'] ?? 'N/A'); ?> (ID: <span id="adminEditMember_displayOrgId"></span>)</p>
+                    <div class="mb-3">
+                        <label for="adminEditMember_newRole" class="form-label">New Organization Role</label>
+                        <select class="form-select" id="adminEditMember_newRole" name="new_organization_role">
+                            <option value="organization_member">Member</option>
+                            <option value="organization_admin">Admin</option>
+                            <option value="organization_owner">Owner</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Role</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Remove Member Modal -->
+<div class="modal fade" id="adminRemoveMemberModal" tabindex="-1" aria-labelledby="adminRemoveMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo site_url('admin/organizations?view_org_id=' . htmlspecialchars($viewingOrganization['_id'] ?? '')); ?>">
+                <input type="hidden" name="action" value="admin_remove_org_member">
+                <input type="hidden" name="user_to_remove_id" id="adminRemoveMember_userId">
+                <input type="hidden" name="organization_id_for_remove" id="adminRemoveMember_orgId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adminRemoveMemberModalLabel">Confirm Member Removal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to remove user <strong id="adminRemoveMember_username"></strong> from this organization?</p>
+                    <p class="text-danger">This action cannot be undone. If the user's global role is 'Organization User' and this is their only organization, their primary link to an organization will be removed.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Confirm Remove</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Edit Organization Details Modal -->
+<div class="modal fade" id="adminEditOrgDetailsModal" tabindex="-1" aria-labelledby="adminEditOrgDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo site_url('admin/organizations' . (isset($_GET['view_org_id']) ? '?view_org_id=' . htmlspecialchars($_GET['view_org_id']) : '')); ?>">
+                <input type="hidden" name="action" value="admin_edit_organization_details">
+                <input type="hidden" name="organization_id_to_edit" id="adminEditOrg_idInput">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adminEditOrgDetailsModalLabel">Edit Organization Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="adminEditOrg_newNameInput" class="form-label">Organization Name</label>
+                        <input type="text" class="form-control" id="adminEditOrg_newNameInput" name="new_organization_name" required>
+                    </div>
+                    <!-- Future: Add field for changing owner -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <?php
 // Store the content in a global variable
 $GLOBALS['page_content'] = ob_get_clean();
@@ -355,6 +674,71 @@ document.addEventListener('DOMContentLoaded', function() {
             if (modalOrgIdInput) modalOrgIdInput.value = orgId;
             if (modalOrgNameDisplay) modalOrgNameDisplay.textContent = orgName;
             if (modalOrgIdDisplay) modalOrgIdDisplay.textContent = orgId;
+        });
+    }
+
+    const adminEditMemberRoleModal = document.getElementById('adminEditMemberRoleModal');
+    if (adminEditMemberRoleModal) {
+        adminEditMemberRoleModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const userId = button.getAttribute('data-user-id');
+            const username = button.getAttribute('data-username');
+            const currentRole = button.getAttribute('data-current-role');
+            const organizationId = button.getAttribute('data-organization-id');
+
+            const modalUserIdInput = adminEditMemberRoleModal.querySelector('#adminEditMember_userId');
+            const modalOrgIdInput = adminEditMemberRoleModal.querySelector('#adminEditMember_orgId');
+            const modalUsernameDisplay = adminEditMemberRoleModal.querySelector('#adminEditMember_username');
+            const modalRoleSelect = adminEditMemberRoleModal.querySelector('#adminEditMember_newRole');
+            const modalDisplayOrgId = adminEditMemberRoleModal.querySelector('#adminEditMember_displayOrgId');
+
+            if(modalUserIdInput) modalUserIdInput.value = userId;
+            if(modalOrgIdInput) modalOrgIdInput.value = organizationId;
+            if(modalUsernameDisplay) modalUsernameDisplay.textContent = username;
+            if(modalDisplayOrgId) modalDisplayOrgId.textContent = organizationId;
+
+            if (modalRoleSelect) {
+                // Set the selected value in the dropdown
+                for (let i = 0; i < modalRoleSelect.options.length; i++) {
+                    if (modalRoleSelect.options[i].value === currentRole) {
+                        modalRoleSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    const adminRemoveMemberModal = document.getElementById('adminRemoveMemberModal');
+    if (adminRemoveMemberModal) {
+        adminRemoveMemberModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const userId = button.getAttribute('data-user-id');
+            const username = button.getAttribute('data-username');
+            const organizationId = button.getAttribute('data-organization-id');
+
+            const modalUserIdInput = adminRemoveMemberModal.querySelector('#adminRemoveMember_userId');
+            const modalOrgIdInput = adminRemoveMemberModal.querySelector('#adminRemoveMember_orgId');
+            const modalUsernameDisplay = adminRemoveMemberModal.querySelector('#adminRemoveMember_username');
+
+            if(modalUserIdInput) modalUserIdInput.value = userId;
+            if(modalOrgIdInput) modalOrgIdInput.value = organizationId;
+            if(modalUsernameDisplay) modalUsernameDisplay.textContent = username;
+        });
+    }
+
+    const adminEditOrgDetailsModal = document.getElementById('adminEditOrgDetailsModal');
+    if (adminEditOrgDetailsModal) {
+        adminEditOrgDetailsModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const orgId = button.getAttribute('data-org-id');
+            const orgName = button.getAttribute('data-org-name');
+
+            const modalOrgIdInput = adminEditOrgDetailsModal.querySelector('#adminEditOrg_idInput');
+            const modalOrgNameInput = adminEditOrgDetailsModal.querySelector('#adminEditOrg_newNameInput');
+
+            if(modalOrgIdInput) modalOrgIdInput.value = orgId;
+            if(modalOrgNameInput) modalOrgNameInput.value = orgName;
         });
     }
 });
