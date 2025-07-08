@@ -21,11 +21,20 @@ ob_start();
                 <a href="<?php echo site_url('login'); ?>" class="btn btn-outline-light">
                     <i class="bi bi-person"></i> Login
                 </a>
+                <?php else: 
+                    $user = auth()->getUser();
+                    $username = htmlspecialchars($user['username']);
+                    if ($user['role'] === Auth::ROLE_ORGANIZATION_USER):
+                ?>
+                    <a href="<?php echo site_url('organization/management'); ?>" class="btn btn-outline-light">
+                        <i class="bi bi-diagram-3"></i> <?php echo $username; ?> (Org)
+                    </a>
                 <?php else: ?>
-                <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-light">
-                    <i class="bi bi-person-circle"></i> <?php echo htmlspecialchars(auth()->getUser()['username']); ?>
-                </a>
-                <?php endif ?>
+                    <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-light">
+                        <i class="bi bi-person-circle"></i> <?php echo $username; ?>
+                    </a>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>

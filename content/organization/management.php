@@ -99,10 +99,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $actionMessage = "Database not available for editing member role.";
         $actionMessageType = 'danger';
     } else {
-        $organizationId = $_POST['organization_id_for_edit'] ?? null;
-        $userToEditId = $_POST['user_to_edit_id'] ?? null;
+        $organizationId = isset($_POST['organization_id_for_edit']) ? (int)$_POST['organization_id_for_edit'] : null;
+        $userToEditId = isset($_POST['user_to_edit_id']) ? (int)$_POST['user_to_edit_id'] : null;
         $newOrganizationRole = $_POST['new_organization_role'] ?? null;
-        $currentActorUserId = $currentUser['_id'];
+        $currentActorUserId = $currentUser['_id']; // This is likely already an int from SleekDB's user store _id
 
         // Fetch current actor's role in this specific organization
         $actorMembership = $orgMembersStore->findOneBy([
@@ -163,13 +163,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // --- Handle Remove Organization Member ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'remove_org_member') {
+    error_log("Attempting to remove member. POST data: " . print_r($_POST, true)); // DEBUG
     if (!isset($orgMembersStore) || !isset($userOrgStore) || !isset($usersStore) || !isset($organizationsStore)) {
         $actionMessage = "Database not available for removing member.";
         $actionMessageType = 'danger';
     } else {
-        $organizationId = $_POST['organization_id_for_remove'] ?? null;
-        $userToRemoveId = $_POST['user_to_remove_id'] ?? null;
-        $currentActorUserId = $currentUser['_id'];
+        $organizationId = isset($_POST['organization_id_for_remove']) ? (int)$_POST['organization_id_for_remove'] : null;
+        $userToRemoveId = isset($_POST['user_to_remove_id']) ? (int)$_POST['user_to_remove_id'] : null;
+        $currentActorUserId = $currentUser['_id']; // This is likely already an int
 
         $actorMembership = $orgMembersStore->findOneBy([
             ['organization_id', '=', $organizationId],
@@ -184,9 +185,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             ['user_id', '=', $userToRemoveId]
         ]);
 
+        error_log("Remove Member - Org ID: " . $organizationId . ", User to Remove: " . $userToRemoveId . ", Actor Role: " . ($currentActorOrgRole ?? 'N/A')); // DEBUG
+        error_log("Remove Member - Member to Remove Query Result: " . print_r($memberToRemove, true)); // DEBUG
+
         if (!$organizationId || !$userToRemoveId || !$memberToRemove) {
-            $actionMessage = "Missing data for member removal or member not found.";
+            $actionMessage = "Missing data for member removal or member not found. (OrgID: {$organizationId}, UserID: {$userToRemoveId})";
             $actionMessageType = 'danger';
+            error_log("Remove Member - FAILED: Missing data or member not found. OrgID: {$organizationId}, UserID: {$userToRemoveId}, MemberData: " . print_r($memberToRemove, true)); // DEBUG
         } elseif ($userToRemoveId === $currentActorUserId) {
             $actionMessage = "You cannot remove yourself from the organization.";
             $actionMessageType = 'warning';
@@ -412,9 +417,19 @@ ob_start();
 <div class="container-admin mt-4">
     <div class="page-header">
         <h1>Organization Management</h1>
-        <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Back to Profile
-        </a>
+        <div>
+            <?php if (auth()->getUser()['role'] !== Auth::ROLE_ORGANIZATION_USER): ?>
+                <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-left"></i> Back to Profile
+                </a>
+            <?php endif; ?>
+            <a href="<?php echo site_url('account'); ?>" class="btn btn-outline-info me-2">
+                <i class="bi bi-gear"></i> Account Settings
+            </a>
+            <a href="<?php echo site_url('logout'); ?>" class="btn btn-outline-danger">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </div>
     </div>
 
     <?php if ($actionMessage): ?>
@@ -473,7 +488,7 @@ ob_start();
                                                 </td>
                                                 <td><?php echo $member['added_at'] ? date('Y-m-d H:i', $member['added_at']) : 'N/A'; ?></td>
                                                 <td class="member-actions">
-                                                    <?php
+                                                    <?php 
                                                     $canEditTarget = false;
                                                     $canRemoveTarget = false;
 
@@ -492,7 +507,7 @@ ob_start();
                                                     }
                                                     ?>
                                                     <?php if ($canEditTarget): ?>
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary edit-member-role-btn"
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary edit-member-role-btn" 
                                                                 data-bs-toggle="modal" data-bs-target="#editRoleModal"
                                                                 data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
                                                                 data-username="<?php echo htmlspecialchars($member['username']); ?>"
@@ -716,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             document.getElementById('editRole_userId').value = userId;
             document.getElementById('editRole_username').textContent = username;
-
+            
             const roleSelect = document.getElementById('editRole_newRole');
             roleSelect.innerHTML = ''; // Clear existing options
 
