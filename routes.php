@@ -153,19 +153,46 @@ if(ENABLE_AUTH) {
         
         if (file_exists($filename)) {
             $formData = json_decode(file_get_contents($filename), true);
+            $formData = json_decode(file_get_contents($filename), true);
             $currentUser = auth()->getUser();
-            
-            // Check if form has a createdBy field and if it matches the current user
-            // Admin users can edit any form
-            if (isset($formData['createdBy']) && $formData['createdBy'] === $currentUser['_id'] || 
-                $currentUser['role'] === 'admin') {
-                // User has permission to edit, redirect to builder with edit mode
+            $canEdit = false;
+
+            if (isset($formData['organization_id']) && !empty($formData['organization_id'])) {
+                // This is an organizational form
+                $dbPath = ROOT_DIR . '/db';
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $membership = $orgMembersStore->findOneBy([
+                    ['organization_id', '=', $formData['organization_id']],
+                    'AND',
+                    ['user_id', '=', $currentUser['_id']]
+                ]);
+
+                if ($membership) {
+                    $orgRole = $membership['organization_role'];
+                    if (in_array($orgRole, ['organization_owner', 'organization_admin', 'organization_member'])) {
+                        $canEdit = true;
+                    }
+                }
+            } else {
+                // This is a personal form
+                if (isset($formData['createdBy']) && $formData['createdBy'] === $currentUser['_id']) {
+                    $canEdit = true;
+                }
+            }
+
+            // System admin can always edit
+            if (auth()->hasRole(Auth::ROLE_ADMIN)) {
+                $canEdit = true;
+            }
+
+            if ($canEdit) {
                 $_GET['edit_mode'] = 'true';
                 view('builder');
             } else {
-                // User doesn't have permission to edit this form
                 http_response_code(403);
-                echo '<div class="alert alert-danger">You do not have permission to edit this form.</div>';
+                // It's better to have a proper error page rendering function.
+                // view('errors/403', ['message' => 'You do not have permission to edit this form.']);
+                echo "<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>You do not have permission to edit this form.</p><p><a href='" . site_url('') . "'>Go to Homepage</a></p></body></html>";
             }
         } else {
             // Form not found

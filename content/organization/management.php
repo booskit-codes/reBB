@@ -91,6 +91,165 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_organization']
 // ... (existing code for org creation) ...
 
 // --- Handle Adding New User to Organization ---
+// ... (existing add user logic) ...
+
+// --- Handle Edit Organization Member Role ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_org_member_role') {
+    if (!isset($orgMembersStore) || !isset($usersStore) || !isset($organizationsStore)) {
+        $actionMessage = "Database not available for editing member role.";
+        $actionMessageType = 'danger';
+    } else {
+        $organizationId = $_POST['organization_id_for_edit'] ?? null;
+        $userToEditId = $_POST['user_to_edit_id'] ?? null;
+        $newOrganizationRole = $_POST['new_organization_role'] ?? null;
+        $currentActorUserId = $currentUser['_id'];
+
+        // Fetch current actor's role in this specific organization
+        $actorMembership = $orgMembersStore->findOneBy([
+            ['organization_id', '=', $organizationId],
+            'AND',
+            ['user_id', '=', $currentActorUserId]
+        ]);
+        $currentActorOrgRole = $actorMembership ? $actorMembership['organization_role'] : null;
+
+        $memberToEdit = $orgMembersStore->findOneBy([
+            ['organization_id', '=', $organizationId],
+            'AND',
+            ['user_id', '=', $userToEditId]
+        ]);
+
+        if (!$organizationId || !$userToEditId || !$newOrganizationRole || !$memberToEdit) {
+            $actionMessage = "Missing data for role edit.";
+            $actionMessageType = 'danger';
+        } elseif ($userToEditId === $currentActorUserId) {
+            $actionMessage = "You cannot edit your own role.";
+            $actionMessageType = 'warning';
+        } elseif ($memberToEdit['organization_role'] === 'organization_owner') {
+            $actionMessage = "The organization owner's role cannot be changed through this interface.";
+            $actionMessageType = 'warning';
+        } elseif (!in_array($newOrganizationRole, ['organization_admin', 'organization_member'])) {
+            $actionMessage = "Invalid target role specified.";
+            $actionMessageType = 'danger';
+        } elseif ($currentActorOrgRole === 'organization_owner') {
+            // Owner can change roles of admins and members to admin or member
+            if (in_array($memberToEdit['organization_role'], ['organization_admin', 'organization_member'])) {
+                $orgMembersStore->updateById($memberToEdit['_id'], ['organization_role' => $newOrganizationRole]);
+                $actionMessage = "User role updated successfully.";
+                $actionMessageType = 'success';
+            } else {
+                $actionMessage = "Owners can only modify Admin or Member roles.";
+                $actionMessageType = 'warning';
+            }
+        } elseif ($currentActorOrgRole === 'organization_admin') {
+            // Admin can only change role of members, and only to 'organization_member'
+            if ($memberToEdit['organization_role'] === 'organization_member' && $newOrganizationRole === 'organization_member') {
+                 // Potentially useful if more granular member roles are added later. For now, it's a no-op if already member.
+                $orgMembersStore->updateById($memberToEdit['_id'], ['organization_role' => $newOrganizationRole]);
+                $actionMessage = "User role updated successfully (or remained the same).";
+                $actionMessageType = 'success';
+            } elseif ($memberToEdit['organization_role'] !== 'organization_member') {
+                $actionMessage = "Admins can only modify roles of Members.";
+                $actionMessageType = 'warning';
+            } elseif ($newOrganizationRole !== 'organization_member') {
+                $actionMessage = "Admins can only assign the Member role.";
+                $actionMessageType = 'warning';
+            }
+        } else {
+            $actionMessage = "You do not have permission to edit member roles.";
+            $actionMessageType = 'danger';
+        }
+    }
+}
+
+// --- Handle Remove Organization Member ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'remove_org_member') {
+    if (!isset($orgMembersStore) || !isset($userOrgStore) || !isset($usersStore) || !isset($organizationsStore)) {
+        $actionMessage = "Database not available for removing member.";
+        $actionMessageType = 'danger';
+    } else {
+        $organizationId = $_POST['organization_id_for_remove'] ?? null;
+        $userToRemoveId = $_POST['user_to_remove_id'] ?? null;
+        $currentActorUserId = $currentUser['_id'];
+
+        $actorMembership = $orgMembersStore->findOneBy([
+            ['organization_id', '=', $organizationId],
+            'AND',
+            ['user_id', '=', $currentActorUserId]
+        ]);
+        $currentActorOrgRole = $actorMembership ? $actorMembership['organization_role'] : null;
+
+        $memberToRemove = $orgMembersStore->findOneBy([
+            ['organization_id', '=', $organizationId],
+            'AND',
+            ['user_id', '=', $userToRemoveId]
+        ]);
+
+        if (!$organizationId || !$userToRemoveId || !$memberToRemove) {
+            $actionMessage = "Missing data for member removal or member not found.";
+            $actionMessageType = 'danger';
+        } elseif ($userToRemoveId === $currentActorUserId) {
+            $actionMessage = "You cannot remove yourself from the organization.";
+            $actionMessageType = 'warning';
+        } elseif ($memberToRemove['organization_role'] === 'organization_owner') {
+            // Basic check to prevent removing the last owner. More robust check would count owners.
+            $ownerCount = $orgMembersStore->count([
+                ['organization_id', '=', $organizationId],
+                'AND',
+                ['organization_role', '=', 'organization_owner']
+            ]);
+            if ($ownerCount <= 1) {
+                $actionMessage = "Cannot remove the last organization owner.";
+                $actionMessageType = 'warning';
+            } elseif ($currentActorOrgRole === 'organization_owner') {
+                 // This case should ideally not happen if UI prevents owner from removing another owner easily.
+                 // For now, let's assume an owner might be able to remove another (non-last) owner if UI allowed.
+                 // $orgMembersStore->deleteById($memberToRemove['_id']); // Placeholder for complex owner removal
+                 $actionMessage = "Removing other owners is a sensitive operation (not fully implemented).";
+                 $actionMessageType = 'warning';
+            } else {
+                 $actionMessage = "Only an organization owner can remove another owner.";
+                 $actionMessageType = 'danger';
+            }
+        } elseif ($currentActorOrgRole === 'organization_owner') {
+            // Owner can remove admins and members
+            if (in_array($memberToRemove['organization_role'], ['organization_admin', 'organization_member'])) {
+                $orgMembersStore->deleteById($memberToRemove['_id']);
+                // Also remove from user_to_organization_links if their global role is ROLE_ORGANIZATION_USER
+                $userGlobalData = $usersStore->findById($userToRemoveId);
+                if ($userGlobalData && $userGlobalData['role'] === Auth::ROLE_ORGANIZATION_USER) {
+                    $userOrgLink = $userOrgStore->findOneBy([['user_id', '=', $userToRemoveId], ['organization_id', '=', $organizationId]]);
+                    if ($userOrgLink) $userOrgStore->deleteById($userOrgLink['_id']);
+                }
+                $actionMessage = "User removed from organization.";
+                $actionMessageType = 'success';
+            } else {
+                $actionMessage = "Owners can only remove Admins or Members."; // Should not happen if UI is correct
+                $actionMessageType = 'warning';
+            }
+        } elseif ($currentActorOrgRole === 'organization_admin') {
+            // Admin can only remove members
+            if ($memberToRemove['organization_role'] === 'organization_member') {
+                $orgMembersStore->deleteById($memberToRemove['_id']);
+                $userGlobalData = $usersStore->findById($userToRemoveId);
+                if ($userGlobalData && $userGlobalData['role'] === Auth::ROLE_ORGANIZATION_USER) {
+                     $userOrgLink = $userOrgStore->findOneBy([['user_id', '=', $userToRemoveId], ['organization_id', '=', $organizationId]]);
+                    if ($userOrgLink) $userOrgStore->deleteById($userOrgLink['_id']);
+                }
+                $actionMessage = "User removed from organization.";
+                $actionMessageType = 'success';
+            } else {
+                $actionMessage = "Admins can only remove Members.";
+                $actionMessageType = 'warning';
+            }
+        } else {
+            $actionMessage = "You do not have permission to remove members.";
+            $actionMessageType = 'danger';
+        }
+    }
+}
+
+
+// --- Handle Adding New User to Organization ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_organization_user_submit'])) {
     if (!isset($userOrgStore) || !isset($organizationsStore) || !isset($orgMembersStore) || !isset($usersStore)) {
         $actionMessage = "Database not available for adding user.";
@@ -313,14 +472,46 @@ ob_start();
                                                     <span class="badge bg-info"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $member['organization_role']))); ?></span>
                                                 </td>
                                                 <td><?php echo $member['added_at'] ? date('Y-m-d H:i', $member['added_at']) : 'N/A'; ?></td>
-                                                <td>
-                                                    <?php if ($currentUser['_id'] !== $member['user_id'] && $currentUserOrgRole === 'organization_owner'): // Owner can manage anyone except themselves ?>
-                                                        <button class="btn btn-sm btn-outline-secondary" disabled>Edit Role</button> <!-- Placeholder -->
-                                                        <button class="btn btn-sm btn-outline-danger" disabled>Remove</button> <!-- Placeholder -->
-                                                    <?php elseif ($currentUser['_id'] === $member['user_id']): ?>
+                                                <td class="member-actions">
+                                                    <?php
+                                                    $canEditTarget = false;
+                                                    $canRemoveTarget = false;
+
+                                                    if ($currentUser['_id'] !== $member['user_id']) { // Cannot act on self
+                                                        if ($currentUserOrgRole === 'organization_owner') {
+                                                            if ($member['organization_role'] !== 'organization_owner') { // Owner cannot edit/remove another owner via this simple interface
+                                                                $canEditTarget = true;
+                                                                $canRemoveTarget = true;
+                                                            }
+                                                        } elseif ($currentUserOrgRole === 'organization_admin') {
+                                                            if ($member['organization_role'] === 'organization_member') { // Admin can only manage members
+                                                                $canEditTarget = true;
+                                                                $canRemoveTarget = true;
+                                                            }
+                                                        }
+                                                    }
+                                                    ?>
+                                                    <?php if ($canEditTarget): ?>
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary edit-member-role-btn"
+                                                                data-bs-toggle="modal" data-bs-target="#editRoleModal"
+                                                                data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
+                                                                data-username="<?php echo htmlspecialchars($member['username']); ?>"
+                                                                data-current-role="<?php echo htmlspecialchars($member['organization_role']); ?>">
+                                                            <i class="bi bi-pencil-square"></i> Edit Role
+                                                        </button>
+                                                    <?php endif; ?>
+                                                    <?php if ($canRemoveTarget): ?>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger remove-member-btn"
+                                                                data-bs-toggle="modal" data-bs-target="#removeMemberModal"
+                                                                data-user-id="<?php echo htmlspecialchars($member['user_id']); ?>"
+                                                                data-username="<?php echo htmlspecialchars($member['username']); ?>">
+                                                            <i class="bi bi-trash"></i> Remove
+                                                        </button>
+                                                    <?php endif; ?>
+                                                    <?php if (!$canEditTarget && !$canRemoveTarget && $currentUser['_id'] === $member['user_id']): ?>
                                                         <span class="text-muted fst-italic">You</span>
-                                                    <?php else: ?>
-                                                        <span class="text-muted fst-italic">-</span>
+                                                    <?php elseif(!$canEditTarget && !$canRemoveTarget): ?>
+                                                         <span class="text-muted fst-italic">-</span>
                                                     <?php endif; ?>
                                                 </td>
                                             </tr>
@@ -358,10 +549,10 @@ ob_start();
                                 <label for="organization_role_for_new_user" class="form-label">Assign Organization Role</label>
                                 <select class="form-select" id="organization_role_for_new_user" name="organization_role_for_new_user">
                                     <option value="organization_member" selected>Member</option>
-                                    <option value="organization_admin">Admin</option>
-                                    <?php if ($currentUserOrgRole === 'organization_owner'): // Only owner can create other owners (though typically owner is singular) ?>
-                                    <!-- <option value="organization_owner">Owner</option> -->
+                                    <?php if ($currentUserOrgRole === 'organization_owner'): ?>
+                                        <option value="organization_admin">Admin</option>
                                     <?php endif; ?>
+                                    <?php // Owners typically don't create other owners directly via this simple form ?>
                                 </select>
                             </div>
                             <button type="submit" name="add_new_organization_user_submit" class="btn btn-primary">
@@ -454,6 +645,115 @@ $GLOBALS['page_content'] = ob_get_clean();
 $GLOBALS['page_title'] = 'Organization Management';
 // Add any page-specific CSS or JS if needed
 // $GLOBALS['page_css'] = '<link rel="stylesheet" href="'. asset_path('css/pages/organization.css') .'?v=' . APP_VERSION . '">';
+?>
 
+<!-- Edit Role Modal -->
+<div class="modal fade" id="editRoleModal" tabindex="-1" aria-labelledby="editRoleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo site_url('organization/management'); ?>">
+                <input type="hidden" name="action" value="edit_org_member_role">
+                <input type="hidden" name="organization_id_for_edit" value="<?php echo htmlspecialchars($organization['_id'] ?? ''); ?>">
+                <input type="hidden" name="user_to_edit_id" id="editRole_userId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editRoleModalLabel">Edit Role for <span id="editRole_username"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editRole_newRole" class="form-label">New Organization Role</label>
+                        <select class="form-select" id="editRole_newRole" name="new_organization_role">
+                            <?php // Options will be populated by JavaScript based on actor's role ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Role</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Member Modal -->
+<div class="modal fade" id="removeMemberModal" tabindex="-1" aria-labelledby="removeMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo site_url('organization/management'); ?>">
+                <input type="hidden" name="action" value="remove_org_member">
+                <input type="hidden" name="organization_id_for_remove" value="<?php echo htmlspecialchars($organization['_id'] ?? ''); ?>">
+                <input type="hidden" name="user_to_remove_id" id="removeMember_userId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="removeMemberModalLabel">Confirm Removal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to remove user <strong id="removeMember_username"></strong> from this organization?</p>
+                    <p class="text-danger">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Remove User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currentUserOrgRole = <?php echo json_encode($currentUserOrgRole); ?>;
+
+    // Edit Role Modal
+    const editRoleModal = document.getElementById('editRoleModal');
+    if (editRoleModal) {
+        editRoleModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const userId = button.getAttribute('data-user-id');
+            const username = button.getAttribute('data-username');
+            const currentRole = button.getAttribute('data-current-role');
+
+            document.getElementById('editRole_userId').value = userId;
+            document.getElementById('editRole_username').textContent = username;
+
+            const roleSelect = document.getElementById('editRole_newRole');
+            roleSelect.innerHTML = ''; // Clear existing options
+
+            // Populate roles based on current user's org role
+            if (currentUserOrgRole === 'organization_owner') {
+                if (currentRole === 'organization_admin' || currentRole === 'organization_member') {
+                    roleSelect.options.add(new Option('Admin', 'organization_admin', false, currentRole === 'organization_admin'));
+                    roleSelect.options.add(new Option('Member', 'organization_member', false, currentRole === 'organization_member'));
+                } else {
+                     roleSelect.options.add(new Option(currentRole.replace('_', ' '), currentRole, true, true)); // Should not happen for owner
+                }
+            } else if (currentUserOrgRole === 'organization_admin') {
+                if (currentRole === 'organization_member') { // Admin can only manage members
+                    roleSelect.options.add(new Option('Member', 'organization_member', false, currentRole === 'organization_member'));
+                } else {
+                     roleSelect.options.add(new Option(currentRole.replace('_', ' '), currentRole, true, true)); // Should not happen for admin editing non-member
+                }
+            }
+            // If no options added (e.g. admin trying to edit admin), disable select or show message - current logic prevents button display
+        });
+    }
+
+    // Remove Member Modal
+    const removeMemberModal = document.getElementById('removeMemberModal');
+    if (removeMemberModal) {
+        removeMemberModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const userId = button.getAttribute('data-user-id');
+            const username = button.getAttribute('data-username');
+
+            document.getElementById('removeMember_userId').value = userId;
+            document.getElementById('removeMember_username').textContent = username;
+        });
+    }
+});
+</script>
+
+<?php
 require_once ROOT_DIR . '/includes/master.php';
 ?>
