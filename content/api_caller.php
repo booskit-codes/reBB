@@ -8,29 +8,32 @@
 // Define the page content to be yielded in the master layout
 ob_start();
 
-$apiIdentifier = null;
+$rawApiIdFromUrl = null; // Will store just the hex part
+$fullApiIdentifier = null; // Will store 'api_' + hex part
 $apiSchemaExists = false;
 $errorMessage = '';
 $page_js_vars_array = ['ajaxUrl' => site_url('ajax')]; // Initialize with ajaxUrl
 
 if (isset($_GET['api'])) {
-    $apiIdentifier = trim($_GET['api']);
-    // Validate the identifier format (api_ followed by 16 hex characters)
-    if (preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
-        $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
-        $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+    $rawApiIdFromUrl = trim($_GET['api']);
+    // Validate the identifier format (now expecting just 16 hex characters)
+    if (preg_match('/^[a-f0-9]{16}$/', $rawApiIdFromUrl)) {
+        $fullApiIdentifier = 'api_' . $rawApiIdFromUrl; // Prepend 'api_' for internal use
+        $apisDir = STORAGE_DIR . '/apis';
+        $apiFilename = $apisDir . '/' . $fullApiIdentifier . '.json';
+
         if (file_exists($apiFilename)) {
             $apiSchemaExists = true;
-            // Pass the identifier to JavaScript so it can fetch the schema details
-            $page_js_vars_array['apiIdentifierToLoad'] = $apiIdentifier;
+            // Pass the RAW ID to JavaScript; JS will prepend "api_" for its AJAX calls
+            $page_js_vars_array['rawApiIdToLoad'] = $rawApiIdFromUrl;
         } else {
-            $errorMessage = "API schema not found for identifier: " . htmlspecialchars($apiIdentifier);
+            $errorMessage = "API schema not found for identifier: " . htmlspecialchars($rawApiIdFromUrl);
         }
     } else {
-        $errorMessage = "Invalid API identifier format provided.";
+        $errorMessage = "Invalid API identifier format provided. Expected a 16-character hexadecimal string.";
     }
 } else {
-    $errorMessage = "No API specified. Please provide an API identifier in the URL (e.g., ?api=api_youridentifier).";
+    $errorMessage = "No API specified. Please provide an API identifier in the URL (e.g., ?api=your16charidentifier).";
 }
 
 ?>

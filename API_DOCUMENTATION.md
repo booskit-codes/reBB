@@ -58,8 +58,8 @@ APIs are defined using the **API Builder** tool on this website.
 5.  **Save API Schema:**
     *   Once you are satisfied, click "Save API Schema".
     *   Upon successful save, the system will provide you with:
-        *   An **API Identifier** (e.g., `api_a1b2c3d4`). This is crucial for calling the API.
-        *   A direct link to the **API Caller page** for this specific API, which will look like `[YourDomain]/api_caller?api=[api_identifier]`.
+        *   An **API Identifier** (e.g., `api_a1b2c3d4`). This consists of the prefix `api_` followed by a 16-character hexadecimal string (e.g., `a1b2c3d4e5f6a7b8`).
+        *   A direct link to the **API Caller page** for this specific API. The URL will look like `[YourDomain]/api_caller?api=[hex_string]`, where `[hex_string]` is *only the 16-character hexadecimal part* of the identifier.
 
 ## 2. Using the API from an External Site/Application
 
@@ -67,11 +67,11 @@ Once an API is set up, it can be called via a public URL endpoint.
 
 **Endpoint Structure:**
 
-`[YourDomain]/api/call/[api_identifier]`
+`[YourDomain]/api/call/[hex_string]`
 
 Where:
 *   `[YourDomain]` is the base URL of this website.
-*   `[api_identifier]` is the unique identifier provided when you saved the API (e.g., `api_a1b2c3d4`).
+*   `[hex_string]` is the 16-character hexadecimal part of the API Identifier (e.g., `a1b2c3d4e5f6a7b8`). The `api_` prefix should *not* be included in this part of the URL. The backend will handle it.
 
 **Passing Parameters:**
 
@@ -85,14 +85,14 @@ Field values are passed as URL query parameters (GET request) or as form data (P
 
 Assuming:
 *   Your domain is `example.com`
-*   API Identifier is `api_charstats`
+*   The 16-character hex part of your API Identifier is `charstats1234abcde` (so full identifier is `api_charstats1234abcde`)
 *   API Fields defined:
     *   `character_name` (single)
     *   `hit_points` (single)
     *   `abilities` (multi-entry)
 
 The call might look like:
-`https://example.com/api/call/api_charstats?character_name=Sir%20Reginald&hit_points=150&abilities[]=Strength&abilities[]=Shield%20Bash`
+`https://example.com/api/call/charstats1234abcde?character_name=Sir%20Reginald&hit_points=150&abilities[]=Strength&abilities[]=Shield%20Bash`
 
 **Expected Response:**
 
@@ -127,10 +127,10 @@ The endpoint will return the generated BBCode as plain text (`text/plain`).
             *   Multi-entry End Wrapper: `[/list]`
 
 2.  **Saving provides:**
-    *   API Identifier: `api_sample123`
+    *   API Identifier: `api_sample123hexpart` (full identifier would be `api_api_sample123hexpart` - this example is a bit meta, assume `sample123hexpart` is the 16-char hex)
 
 3.  **External Call (GET):**
-    `https://[YourDomain]/api/call/api_sample123?username=JaneDev&status_message=Coding%20away!&user_interests[]=PHP&user_interests[]=JavaScript&user_interests[]=Hiking`
+    `https://[YourDomain]/api/call/sample123hexpart?username=JaneDev&status_message=Coding%20away!&user_interests[]=PHP&user_interests[]=JavaScript&user_interests[]=Hiking`
 
 4.  **Expected BBCode Output (`text/plain`):**
     ```bbcode
@@ -147,7 +147,9 @@ The endpoint will return the generated BBCode as plain text (`text/plain`).
 
 ---
 
-Remember to replace `[YourDomain]` and `[api_identifier]` with your actual site URL and the specific API identifier you are using.
-You can find a list of available APIs and their details (including identifiers and fields) by navigating to the "API" link in the site footer, which leads to this documentation or a dynamic API listing page.
-(Self-correction: The last sentence will be true once the footer link points to this MD file, or if a dynamic page is reinstated later. For now, the user gets the identifier upon creation).
-The API Caller page on this site (`[YourDomain]/api_caller?api=[api_identifier]`) can also be used to test your API structure and BBCode output.
+Remember to replace `[YourDomain]` and `[hex_string]` (or `[api_identifier]` where appropriate for the full ID) with your actual site URL and the specific API identifier components.
+When using the API Caller page on this site, the URL will be `[YourDomain]/api_caller?api=[hex_string]` (using only the 16-character hex part).
+The public endpoint for external calls is `[YourDomain]/api/call/[hex_string]` (also using only the 16-character hex part).
+The system automatically prepends the `api_` prefix internally for file lookups.
+The `{api_name}` wildcard in your Main BBCode Template will be replaced by the full API Identifier (e.g., `api_a1b2c3d4e5f6a7b8`).
+You receive the full API Identifier (e.g. `api_a1b2c3d4e5f6a7b8`) and the API Caller URL (with just the hex part) when you save an API in the builder.

@@ -6,30 +6,32 @@
 header('Content-Type: text/plain');
 require_once ROOT_DIR . '/core/bbcode_engine.php'; // Ensure BbcodeEngine class is loaded
 
-$apiIdentifier = null;
+$rawApiIdFromUrl = null;
 if (isset($_GET['id'])) { // 'id' is set by the router from ':api_identifier'
-    $apiIdentifier = trim($_GET['id']);
+    $rawApiIdFromUrl = trim($_GET['id']);
 }
 
-if (empty($apiIdentifier)) {
+if (empty($rawApiIdFromUrl)) {
     http_response_code(400);
-    echo "Error: API identifier is missing.";
+    echo "Error: API identifier (hex string) is missing from the URL.";
     exit;
 }
 
-// Validate the identifier format (api_ followed by 16 hex characters)
-if (!preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+// Validate the raw identifier format (expecting just 16 hex characters)
+if (!preg_match('/^[a-f0-9]{16}$/', $rawApiIdFromUrl)) {
     http_response_code(400);
-    echo "Error: Invalid API identifier format.";
+    echo "Error: Invalid API identifier format. Expected a 16-character hexadecimal string.";
     exit;
 }
+
+$fullApiIdentifier = 'api_' . $rawApiIdFromUrl; // Prepend 'api_' for internal use
 
 $apisDir = STORAGE_DIR . '/apis';
-$apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+$apiFilename = $apisDir . '/' . $fullApiIdentifier . '.json';
 
 if (!file_exists($apiFilename)) {
     http_response_code(404);
-    echo "Error: API schema not found.";
+    echo "Error: API schema not found for identifier " . htmlspecialchars($rawApiIdFromUrl) . ".";
     exit;
 }
 
@@ -38,7 +40,7 @@ $apiSchema = json_decode($schemaContent, true);
 
 if ($apiSchema === null || !isset($apiSchema['fields']) || !is_array($apiSchema['fields']) || !isset($apiSchema['main_bbcode_template'])) {
     http_response_code(500);
-    error_log("Corrupt or invalid API schema for identifier: " . $apiIdentifier);
+    error_log("Corrupt or invalid API schema for identifier: " . $fullApiIdentifier);
     echo "Error: Could not process API schema. It might be corrupt or invalid.";
     exit;
 }
@@ -60,7 +62,7 @@ try {
     echo $generatedBbcode;
 } catch (Exception $e) {
     http_response_code(500);
-    error_log("Error during BBCode generation for API " . $apiIdentifier . ": " . $e->getMessage());
+    error_log("Error during BBCode generation for API " . $fullApiIdentifier . ": " . $e->getMessage()); // Use full identifier in log
     echo "Error: Could not generate BBCode due to a server error.";
 }
 

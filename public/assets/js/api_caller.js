@@ -8,14 +8,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyBbcodeBtn = document.getElementById('copyBbcodeBtn'); // Might not exist
     // const noApiSelectedMessage = document.getElementById('noApiSelectedMessage'); // No longer exists
 
-    let currentSelectedApi = null; // This will be the api_identifier from URL
+    let currentSelectedApi = null; // This will store the FULL api_identifier (e.g., api_xxxx)
 
-    // Load API fields if an identifier is provided by PHP
-    // Ensure `apiIdentifierToLoad` is defined by PHP script block before this script runs.
-    if (typeof apiIdentifierToLoad !== 'undefined' && apiIdentifierToLoad) {
-        currentSelectedApi = apiIdentifierToLoad;
+    // Load API fields if a raw identifier is provided by PHP
+    // Ensure `rawApiIdToLoad` is defined by PHP script block before this script runs.
+    if (typeof rawApiIdToLoad !== 'undefined' && rawApiIdToLoad && /^[a-f0-9]{16}$/.test(rawApiIdToLoad)) {
+        currentSelectedApi = "api_" + rawApiIdToLoad; // Prepend "api_"
         if (apiCallForm && apiInputFieldsContainer) { // Check if form elements are on page
-             loadApiFields(currentSelectedApi);
+             loadApiFields(currentSelectedApi); // Pass the full identifier
         } else if (!apiCallForm || !apiInputFieldsContainer) {
             // This case implies PHP determined an error before rendering the form,
             // so JS doesn't need to do much other than not erroring out.
