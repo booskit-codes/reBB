@@ -1069,7 +1069,7 @@ if ($requestType === 'schema') {
     }
 
     // Generate random string for filename
-    $randomString = bin2hex(random_bytes(8)); // Creates a 16-character hex string
+    $randomString = bin2hex(random_bytes(16)); // Creates a 16-character hex string
     $apiIdentifier = 'api_' . $randomString;
 
     $apiSchema = [
@@ -1100,7 +1100,7 @@ if ($requestType === 'schema') {
 
     if (file_put_contents($apiFilename, json_encode($apiSchema, JSON_PRETTY_PRINT))) {
         logAttempt('Successfully saved API schema: ' . $userProvidedApiName . ' with ID: ' . $apiIdentifier . ' to ' . $apiFilename, false);
-        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_identifier' => $apiIdentifier, 'display_name' => $userProvidedApiName]);
+        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_identifier' => $randomString, 'display_name' => $userProvidedApiName]);
     } else {
         logAttempt('Failed to write API schema to file: ' . $apiFilename);
         echo json_encode(['success' => false, 'error' => 'Server error: Could not save API schema.']);

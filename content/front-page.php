@@ -89,23 +89,11 @@ ob_start();
                             <a href="<?php echo site_url('directory'); ?>" class="btn btn-outline-secondary btn-directory btn-action-common-size">
                                 <i class="bi bi-collection"></i> Browse Public Directory
                             </a>
-                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action-common-size">
+                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-directory btn-action-common-size">
                                 <i class="bi bi-gear-wide-connected"></i> Create API System
-                                <!-- <small>Build custom API endpoints</small> --> <!-- Small text might make it uneven -->
                             </a>
                         </div>
                     </div>
-
-                    <!-- API Toolkit section removed as its button is now part of "Create a Form" -->
-                    <!-- <div class="builder-option mt-3">
-                        <h3>API Toolkit</h3>
-                        <div class="builder-buttons">
-                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action">
-                                <i class="bi bi-gear-wide-connected"></i> Create API System
-                                <small>Build custom API endpoints</small>
-                            </a>
-                        </div>
-                    </div> -->
                 </div>
                 
                 <div id="hashInputContainer" class="hash-input-container">
