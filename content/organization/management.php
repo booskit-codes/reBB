@@ -28,7 +28,7 @@ try {
 }
 
 // --- Handle Organization Creation ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_organization'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_organization']) && ENABLE_ORGANIZATIONS) {
     if (!isset($userOrgStore) || !isset($organizationsStore)) {
         $actionMessage = "Database not available for organization creation.";
         $actionMessageType = 'danger';
@@ -632,24 +632,35 @@ ob_start();
         </div>
 
     <?php else: ?>
+        <?php if(!ENABLE_ORGANIZATIONS): ?>
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Create Your Organization</h4>
+                </div>
+                <div class="card-body">
+                    <p>Organizations are currently disabled on this website.</p>
+                </div>
+            </div>
         <!-- User is NOT in an Organization -->
-        <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0">Create Your Organization</h4>
+         <?php else: ?>
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Create Your Organization</h4>
+                </div>
+                <div class="card-body">
+                    <p>You are not currently part of an organization. Create one to manage shared forms and resources.</p>
+                    <form method="POST" action="<?php echo site_url('organization/management'); ?>">
+                        <div class="mb-3">
+                            <label for="organization_name" class="form-label">Organization Name</label>
+                            <input type="text" class="form-control" id="organization_name" name="organization_name" required>
+                        </div>
+                        <button type="submit" name="create_organization" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Create Organization
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="card-body">
-                <p>You are not currently part of an organization. Create one to manage shared forms and resources.</p>
-                <form method="POST" action="<?php echo site_url('organization/management'); ?>">
-                    <div class="mb-3">
-                        <label for="organization_name" class="form-label">Organization Name</label>
-                        <input type="text" class="form-control" id="organization_name" name="organization_name" required>
-                    </div>
-                    <button type="submit" name="create_organization" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Create Organization
-                    </button>
-                </form>
-            </div>
-        </div>
+         <?php endif; ?>
     <?php endif; ?>
 
 </div>

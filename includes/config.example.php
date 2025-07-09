@@ -56,6 +56,8 @@ define('CUSTOM_LINK_MAX_LENGTH',   30);      // Maximum length for custom links
 define('ENABLE_AUTH',       true);                             // Enables the authentication system (login page)
 define('ENABLE_DONATIONS',  false);                             // Enables the "donations" button and links.
 define('ENABLE_JSON_VIEW',  true);                              // Enables the ability to view a form's json contents / copy someone's form.
+define('ENABLE_API_SYSTEM',  false);                              // Enables public api calls to the website and people to create their own APIs.
+define('ENABLE_ORGANIZATIONS',  false);                              // Enables the ability to create organizations.
 
 // Footer settings
 define('FOOTER_TEXT',       'Made with ❤️ by <a href="https://booskit.dev/" target="_blank">booskit</a>');

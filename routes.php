@@ -206,29 +206,31 @@ if(ENABLE_AUTH) {
 // API Routes
 // ===================================
 // API Builder page
-get('/api_builder', function() {
-    view('api_builder');
-});
+if(ENABLE_API_SYSTEM) {
+    get('/api_builder', function() {
+        view('api_builder');
+    });
 
-// API Caller page (defining it here for when it's created)
-get('/api_caller', function() {
-    view('api_caller');
-});
+    // API Caller page (defining it here for when it's created)
+    get('/api_caller', function() {
+        view('api_caller');
+    });
 
-// AJAX endpoint for form operations
-any('/ajax', function() {
-    view('ajax');
-});
+    // AJAX endpoint for form operations
+    any('/ajax', function() {
+        view('ajax');
+    });
 
-// Public API execution endpoint
-get('/api/call/:api_identifier', function($params) {
-    // Pass the api_identifier to the view script via $_GET, similar to other routes
-    // The execute_api.php script will then handle loading and processing.
-    if (isset($params['api_identifier'])) {
-        $_GET['id'] = $params['api_identifier'];
-    }
-    view('execute_api');
-});
+    // Public API execution endpoint
+    get('/api/call/:api_identifier', function($params) {
+        // Pass the api_identifier to the view script via $_GET, similar to other routes
+        // The execute_api.php script will then handle loading and processing.
+        if (isset($params['api_identifier'])) {
+            $_GET['id'] = $params['api_identifier'];
+        }
+        view('execute_api');
+    });
+}
 
 // ===================================
 // User Routes
