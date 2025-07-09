@@ -90,7 +90,7 @@ ob_start();
     <div class="page-header">
         <h1>Edit Form JSON: <?php echo htmlspecialchars($formId ?? 'N/A'); ?></h1>
         <div>
-            <a href="<?php echo site_url('admin/admin'); ?>" class="btn btn-outline-secondary me-2">
+            <a href="<?php echo site_url('admin'); ?>" class="btn btn-outline-secondary me-2">
                 <i class="bi bi-speedometer2"></i> Admin Dashboard
             </a>
              <a href="<?php echo site_url('admin/organizations'); ?>" class="btn btn-outline-info me-2">
