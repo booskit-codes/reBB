@@ -152,3 +152,21 @@ body {
 .mx-2 {
   margin-right: 0.5rem !important;
 }
+
+/* For front-page action buttons to have similar sizing */
+.btn-action-common-size {
+    flex-basis: 48%; /* Distribute space, leaving a little gap */
+    text-align: center; /* Ensure text inside is centered if button stretches */
+    display: flex; /* For aligning icon and text if needed */
+    flex-direction: column; /* Stack icon and text */
+    justify-content: center; /* Center content vertically */
+    align-items: center; /* Center content horizontally */
+    padding-top: 0.75rem; /* Adjust padding as needed */
+    padding-bottom: 0.75rem;
+    min-height: 70px; /* Ensure a minimum height for consistency */
+}
+
+.btn-action-common-size i {
+    font-size: 1.5rem; /* Icon size */
+    margin-bottom: 0.25rem; /* Space between icon and text */
+}

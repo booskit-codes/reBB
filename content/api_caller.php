@@ -15,9 +15,9 @@ $page_js_vars_array = ['ajaxUrl' => site_url('ajax')]; // Initialize with ajaxUr
 
 if (isset($_GET['api'])) {
     $apiIdentifier = trim($_GET['api']);
-    // Validate the identifier format (api_ followed by alphanumeric)
-    if (preg_match('/^api_[a-zA-Z0-9]+$/', $apiIdentifier)) {
-        $apisDir = ROOT_DIR . '/apis';
+    // Validate the identifier format (api_ followed by 16 hex characters)
+    if (preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+        $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
         $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
         if (file_exists($apiFilename)) {
             $apiSchemaExists = true;

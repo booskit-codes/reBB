@@ -220,6 +220,16 @@ any('/ajax', function() {
     view('ajax');
 });
 
+// Public API execution endpoint
+get('/api/call/:api_identifier', function($params) {
+    // Pass the api_identifier to the view script via $_GET, similar to other routes
+    // The execute_api.php script will then handle loading and processing.
+    if (isset($params['api_identifier'])) {
+        $_GET['id'] = $params['api_identifier'];
+    }
+    view('execute_api');
+});
+
 // ===================================
 // User Routes
 // ===================================

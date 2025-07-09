@@ -5,6 +5,7 @@
  * This file handles the backend ajax calls.
  */
 header('Content-Type: application/json');
+require_once ROOT_DIR . '/core/bbcode_engine.php'; // Ensure BbcodeEngine class is loaded
 
 // Make sure constants are defined
 if (!defined('MAX_REQUESTS_PER_HOUR')) {
@@ -1068,13 +1069,13 @@ if ($requestType === 'schema') {
     }
 
     // Generate random string for filename
-    $randomString = bin2hex(random_bytes(8)); // 16 characters long
+    $randomString = bin2hex(random_bytes(8)); // Creates a 16-character hex string
     $apiIdentifier = 'api_' . $randomString;
 
     $apiSchema = [
-        'api_identifier' => $apiIdentifier, // Store the identifier used for the filename
-        'display_name' => $userProvidedApiName, // User-friendly name
-        'api_name_placeholder' => $internalApiName, // Name to be used for {api_name} wildcard in template
+        'api_identifier' => $apiIdentifier,
+        'display_name' => $userProvidedApiName,
+        'api_name_placeholder' => $apiIdentifier, // Use the unique api_identifier for the {api_name} wildcard
         'main_bbcode_template' => $mainBbcodeTemplate,
         'fields' => $cleanedFields,
         'created_at' => time(),
@@ -1082,7 +1083,7 @@ if ($requestType === 'schema') {
         // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest'
     ];
 
-    $apisDir = ROOT_DIR . '/apis';
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
     if (!is_dir($apisDir)) {
         if (!mkdir($apisDir, 0755, true)) {
             logAttempt('Failed to create apis directory: ' . $apisDir);
@@ -1098,7 +1099,7 @@ if ($requestType === 'schema') {
     // If it were to happen, file_put_contents would overwrite. A loop with file_exists could prevent this if necessary.
 
     if (file_put_contents($apiFilename, json_encode($apiSchema, JSON_PRETTY_PRINT))) {
-        logAttempt('Successfully saved API schema: ' . $userProvidedApiName . ' with ID: ' . $apiIdentifier, false);
+        logAttempt('Successfully saved API schema: ' . $userProvidedApiName . ' with ID: ' . $apiIdentifier . ' to ' . $apiFilename, false);
         echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_identifier' => $apiIdentifier, 'display_name' => $userProvidedApiName]);
     } else {
         logAttempt('Failed to write API schema to file: ' . $apiFilename);
@@ -1107,24 +1108,25 @@ if ($requestType === 'schema') {
     exit;
 
 } elseif ($requestType === 'get_api_schema_details') { // New action to fetch schema for api_caller.js
-    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
+    $apiIdentifier = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // api_name from JS is the api_identifier
 
-    if (empty($apiName)) {
-        logAttempt('API schema detail request with empty API name.');
-        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+    if (empty($apiIdentifier)) {
+        logAttempt('API schema detail request with empty API identifier.');
+        echo json_encode(['success' => false, 'error' => 'API Identifier is required.']);
         exit;
     }
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
-        logAttempt('API schema detail request with invalid API name: ' . $apiName);
-        echo json_encode(['success' => false, 'error' => 'Invalid API Name format.']);
+    // Validate api_identifier format (api_ followed by hex, matching generation)
+    if (!preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+        logAttempt('API schema detail request with invalid API identifier format: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Identifier format.']);
         exit;
     }
 
-    $apisDir = ROOT_DIR . '/apis';
-    $apiFilename = $apisDir . '/' . $apiName . '.json';
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
 
     if (!file_exists($apiFilename)) {
-        logAttempt('API schema detail request for non-existent API: ' . $apiName);
+        logAttempt('API schema detail request for non-existent API: ' . $apiIdentifier);
         echo json_encode(['success' => false, 'error' => 'API schema not found.']);
         exit;
     }
@@ -1142,25 +1144,25 @@ if ($requestType === 'schema') {
     exit;
 
 } elseif ($requestType === 'generate_api_bbcode') {
-    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
+    $apiIdentifier = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // api_name from JS is the api_identifier
     $fieldValues = isset($requestData['field_values']) && is_array($requestData['field_values']) ? $requestData['field_values'] : [];
 
-    if (empty($apiName)) {
-        logAttempt('BBCode generation request with empty API name.');
-        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+    if (empty($apiIdentifier)) {
+        logAttempt('BBCode generation request with empty API identifier.');
+        echo json_encode(['success' => false, 'error' => 'API Identifier is required.']);
         exit;
     }
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
-        logAttempt('BBCode generation request with invalid API name: ' . $apiName);
-        echo json_encode(['success' => false, 'error' => 'Invalid API Name format.']);
+    if (!preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+        logAttempt('BBCode generation request with invalid API identifier format: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Identifier format.']);
         exit;
     }
 
-    $apisDir = ROOT_DIR . '/apis';
-    $apiFilename = $apisDir . '/' . $apiName . '.json';
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
 
     if (!file_exists($apiFilename)) {
-        logAttempt('BBCode generation request for non-existent API: ' . $apiName);
+        logAttempt('BBCode generation request for non-existent API: ' . $apiIdentifier);
         echo json_encode(['success' => false, 'error' => 'API schema not found.']);
         exit;
     }
@@ -1170,60 +1172,20 @@ if ($requestType === 'schema') {
 
     // Check for the new main_bbcode_template and overall structure
     if ($schemaData === null || !isset($schemaData['main_bbcode_template']) || !isset($schemaData['fields']) || !is_array($schemaData['fields'])) {
-        logAttempt('Error reading or invalid structure in API schema JSON for: ' . $apiName);
+        logAttempt('Error reading or invalid structure in API schema JSON for: ' . $apiIdentifier);
         echo json_encode(['success' => false, 'error' => 'Error reading API schema or schema is malformed. Check main_bbcode_template and fields.']);
         exit;
     }
 
-    $mainTemplate = $schemaData['main_bbcode_template'];
-
-    foreach ($schemaData['fields'] as $fieldSchema) {
-        $fieldNameSlug = $fieldSchema['name']; // This is already sanitized on save
-        $placeholder = '{' . $fieldNameSlug . '}';
-        $fieldReplacement = "";
-
-        $individualWrapper = $fieldSchema['individual_wrapper'] ?? '{field_value}';
-        $isMultiEntry = $fieldSchema['is_multi_entry'] ?? false;
-
-        $submittedValue = $fieldValues[$fieldNameSlug] ?? null;
-
-        if ($isMultiEntry) {
-            $multiStartWrapper = $fieldSchema['multi_start_wrapper'] ?? '';
-            $multiEndWrapper = $fieldSchema['multi_end_wrapper'] ?? '';
-            $itemsContent = "";
-
-            if (is_array($submittedValue)) {
-                foreach ($submittedValue as $item) {
-                    $itemValue = htmlspecialchars($item, ENT_QUOTES, 'UTF-8');
-                    $itemsContent .= str_replace('{field_value}', $itemValue, $individualWrapper);
-                }
-            } elseif ($submittedValue !== null) { // Handle case where a single value might be passed for a multi-entry (less ideal)
-                $itemValue = htmlspecialchars($submittedValue, ENT_QUOTES, 'UTF-8');
-                $itemsContent .= str_replace('{field_value}', $itemValue, $individualWrapper);
-            }
-
-            if(!empty($itemsContent) || !empty($multiStartWrapper) || !empty($multiEndWrapper) ) { // only add wrappers if there's content or wrappers themselves
-                $fieldReplacement = $multiStartWrapper . $itemsContent . $multiEndWrapper;
-            }
-
-        } else {
-            $singleValue = is_array($submittedValue) ? ($submittedValue[0] ?? '') : ($submittedValue ?? ''); // Take first if array, or the value itself
-            $singleValue = htmlspecialchars($singleValue, ENT_QUOTES, 'UTF-8');
-            if ($singleValue !== '' || strpos($individualWrapper, '{field_value}') === false ) { // Process if value or wrapper doesn't need value
-                 $fieldReplacement = str_replace('{field_value}', $singleValue, $individualWrapper);
-            }
-        }
-        $mainTemplate = str_replace($placeholder, $fieldReplacement, $mainTemplate);
+    try {
+        $finalBbcode = BbcodeEngine::generateBbcodeForApi($schemaData, $fieldValues);
+        logAttempt('Successfully generated BBCode for API: ' . $apiIdentifier, false);
+        echo json_encode(['success' => true, 'bbcode' => $finalBbcode]);
+    } catch (Exception $e) {
+        http_response_code(500); // Should already be caught by engine, but as a fallback
+        error_log("Error during BBCode generation for API " . $apiIdentifier . " in AJAX: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error: Could not generate BBCode due to a server error.']);
     }
-
-    // Final replacement for {api_name}
-    $finalBbcode = str_replace('{api_name}', htmlspecialchars($schemaData['api_name'], ENT_QUOTES, 'UTF-8'), $mainTemplate);
-
-    // Clean up any remaining unmatched field placeholders from the main template
-    $finalBbcode = preg_replace('/{[a-zA-Z0-9_]+}/', '', $finalBbcode);
-
-    logAttempt('Successfully generated BBCode for API: ' . $apiName, false);
-    echo json_encode(['success' => true, 'bbcode' => $finalBbcode]);
     exit;
 
 } else {

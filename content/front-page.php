@@ -85,22 +85,27 @@ ob_start();
                                 <small>Simplified building experience</small>
                             </a>
                         </div>
-                        <div class="directory-button-container">
-                            <a href="<?php echo site_url('directory'); ?>" class="btn btn-outline-secondary btn-directory">
+                        <div class="d-flex justify-content-between mt-2"> <!-- Flex container for side-by-side buttons -->
+                            <a href="<?php echo site_url('directory'); ?>" class="btn btn-outline-secondary btn-directory btn-action-common-size">
                                 <i class="bi bi-collection"></i> Browse Public Directory
+                            </a>
+                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action-common-size">
+                                <i class="bi bi-gear-wide-connected"></i> Create API System
+                                <!-- <small>Build custom API endpoints</small> --> <!-- Small text might make it uneven -->
                             </a>
                         </div>
                     </div>
 
-                    <div class="builder-option mt-3">
+                    <!-- API Toolkit section removed as its button is now part of "Create a Form" -->
+                    <!-- <div class="builder-option mt-3">
                         <h3>API Toolkit</h3>
                         <div class="builder-buttons">
-                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action"> <!-- Using btn-info for a different color -->
+                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action">
                                 <i class="bi bi-gear-wide-connected"></i> Create API System
                                 <small>Build custom API endpoints</small>
                             </a>
                         </div>
-                    </div>
+                    </div> -->
                 </div>
                 
                 <div id="hashInputContainer" class="hash-input-container">

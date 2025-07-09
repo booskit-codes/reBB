@@ -16,7 +16,8 @@ APIs are defined using the **API Builder** tool on this website.
     *   **Main BBCode Template:** This is the primary structure of your API's output. You will use wildcards here that correspond to the "Field Names" you define below.
         *   Example:
             ```bbcode
-            [article title="{api_name}"]
+            [article id="{api_name}"]
+            Display Title: {display_title}
             Author: {author_name}
             Date: {publish_date}
 
@@ -25,7 +26,8 @@ APIs are defined using the **API Builder** tool on this website.
             [tags]{tags}[/tags]
             [/article]
             ```
-        *   The `{api_name}` wildcard will be replaced by the "API Name (Display Name)" you set.
+        *   The `{api_name}` wildcard will be replaced by the unique **API Identifier** (e.g., `api_a1b2c3d4`) that is generated when you save the API. This is useful for creating unique IDs or references in your BBCode output.
+        *   If you want to use the human-readable "API Name (Display Name)" in your template, you should create a separate field for it (e.g., a field named `display_title`) and pass its value when calling the API.
         *   Other wildcards like `{author_name}`, `{publish_date}`, `{content_body}`, `{tags}` must match the "Field Names" you define.
 
 3.  **Define API Fields:**
