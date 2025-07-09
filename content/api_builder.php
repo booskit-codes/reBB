@@ -23,9 +23,9 @@ ob_start();
                 API Configuration
             </div>
             <div class="card-body">
-                <div class="mb-3">
+                <div class="mb-3 d-none">
                     <label for="apiName" class="form-label">API Name</label>
-                    <input type="text" class="form-control" id="apiName" name="api_name" placeholder="e.g., my_character_sheet_api" required>
+                    <input type="text" class="form-control" id="apiName" name="api_name" placeholder="e.g., my_character_sheet_api" value="api" required>
                     <div class="form-text">This will be used for the filename (e.g., my_character_sheet_api.json) and for calling the API. Use letters, numbers, and underscores only.</div>
                 </div>
 

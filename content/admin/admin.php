@@ -497,6 +497,7 @@ ob_start();
             <a href="<?php echo site_url('admin/organizations'); ?>" class="btn btn-warning me-2"><i class="bi bi-diagram-3-fill"></i> Manage Orgs</a>
             <a href="<?php echo site_url('admin/lists'); ?>" class="btn btn-outline-primary me-2"><i class="bi bi-collection"></i> User Lists</a>
             <a href="<?php echo site_url('admin/directory'); ?>" class="btn btn-outline-secondary me-2"><i class="bi bi-clipboard"></i> Public Directory</a>
+            <a href="<?php echo site_url('admin/apis'); ?>" class="btn btn-dark me-2"><i class="bi bi-hdd-stack"></i> Manage APIs</a> <!-- New Button -->
             <a href="?" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
             <a href="<?php echo site_url('logout'); ?>" class="btn btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>

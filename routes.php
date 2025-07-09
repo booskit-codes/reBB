@@ -301,6 +301,11 @@ if(ENABLE_AUTH) {
         auth()->requireRole(Auth::ROLE_ADMIN, 'login'); // Expects ?form_id=XYZ
         view('admin/form_json_editor');
     });
+
+    get('/admin/apis', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN); // Ensure admin role
+        view('admin/manage_apis');
+    });
 }
 
 // ===================================
