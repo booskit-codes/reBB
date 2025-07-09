@@ -210,7 +210,8 @@ function generate_meta_tags() {
                     <a href="<?php echo site_url('profile'); ?>">My Forms</a> • 
                 <?php endif; ?>
                 <a href="<?php echo FOOTER_GITHUB; ?>" target="_blank">Github</a> • 
-                <a href="<?php echo DOCS_URL; ?>" target="_blank">Documentation</a> • 
+                <a href="<?php echo site_url('API_DOCUMENTATION.md'); ?>" target="_blank">API</a> •
+                <a href="<?php echo DOCS_URL; ?>" target="_blank">Docs</a> •
                 <?php if (ENABLE_DONATIONS): ?>
                     <a href="<?php echo site_url('donate'); ?>" class="donate-footer-link"><i class="bi bi-heart-fill"></i> Donate</a> • 
                 <?php endif; ?>
