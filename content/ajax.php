@@ -1011,6 +1011,175 @@ if ($requestType === 'schema') {
             exit;
     }
     exit;
+} elseif ($requestType === 'save_api_schema') {
+    // Ensure user is logged in (optional, depending on requirements)
+    // if (!auth()->isLoggedIn()) {
+    //     logAttempt('Unauthorized API schema save attempt');
+    //     echo json_encode(['success' => false, 'error' => 'Authentication required to save API schemas.']);
+    //     exit;
+    // }
+
+    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
+    $overallWrapper = isset($requestData['overall_wrapper']) ? $requestData['overall_wrapper'] : '';
+    $fields = isset($requestData['fields']) && is_array($requestData['fields']) ? $requestData['fields'] : [];
+
+    if (empty($apiName)) {
+        logAttempt('API schema save attempt with empty API name.');
+        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+        exit;
+    }
+
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
+        logAttempt('API schema save attempt with invalid API name: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'API Name can only contain letters, numbers, and underscores.']);
+        exit;
+    }
+
+    if (empty($fields)) {
+        logAttempt('API schema save attempt with no fields for API: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'At least one field is required for the API.']);
+        exit;
+    }
+
+    $cleanedFields = [];
+    foreach ($fields as $field) {
+        if (isset($field['name']) && !empty(trim($field['name']))) {
+            $cleanedFields[] = [
+                'name' => trim($field['name']),
+                'wrapper' => isset($field['wrapper']) ? $field['wrapper'] : '{field_value}' // Default wrapper
+            ];
+        }
+    }
+
+    if (empty($cleanedFields)) {
+        logAttempt('API schema save attempt with no valid fields after cleaning for API: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'No valid fields provided. Each field must have a name.']);
+        exit;
+    }
+
+    $apiSchema = [
+        'api_name' => $apiName,
+        'overall_wrapper' => $overallWrapper,
+        'fields' => $cleanedFields,
+        'created_at' => time(),
+        // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest' // Optional: track creator
+    ];
+
+    $apisDir = ROOT_DIR . '/apis'; // Changed from STORAGE_DIR to ROOT_DIR based on plan
+    if (!is_dir($apisDir)) {
+        if (!mkdir($apisDir, 0755, true)) {
+            logAttempt('Failed to create apis directory: ' . $apisDir);
+            echo json_encode(['success' => false, 'error' => 'Server error: Could not create API storage.']);
+            exit;
+        }
+    }
+
+    $apiFilename = $apisDir . '/' . $apiName . '.json';
+
+    if (file_exists($apiFilename)) {
+        // Optional: Add logic to prevent overwriting or require confirmation
+        // For now, we will overwrite.
+        logAttempt('Overwriting existing API schema: ' . $apiName);
+    }
+
+    if (file_put_contents($apiFilename, json_encode($apiSchema, JSON_PRETTY_PRINT))) {
+        logAttempt('Successfully saved API schema: ' . $apiName, false);
+        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_name' => $apiName]);
+    } else {
+        logAttempt('Failed to write API schema to file: ' . $apiFilename);
+        echo json_encode(['success' => false, 'error' => 'Server error: Could not save API schema.']);
+    }
+    exit;
+
+} elseif ($requestType === 'get_api_schema_details') { // New action to fetch schema for api_caller.js
+    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
+
+    if (empty($apiName)) {
+        logAttempt('API schema detail request with empty API name.');
+        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+        exit;
+    }
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
+        logAttempt('API schema detail request with invalid API name: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Name format.']);
+        exit;
+    }
+
+    $apisDir = ROOT_DIR . '/apis';
+    $apiFilename = $apisDir . '/' . $apiName . '.json';
+
+    if (!file_exists($apiFilename)) {
+        logAttempt('API schema detail request for non-existent API: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'API schema not found.']);
+        exit;
+    }
+
+    $schemaContent = file_get_contents($apiFilename);
+    $schemaData = json_decode($schemaContent, true);
+
+    if ($schemaData === null) {
+        logAttempt('Failed to decode API schema JSON for: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'Error reading API schema.']);
+        exit;
+    }
+    logAttempt('Successfully fetched API schema details for: ' . $apiName, false);
+    echo json_encode(['success' => true, 'schema' => $schemaData]);
+    exit;
+
+} elseif ($requestType === 'generate_api_bbcode') {
+    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
+    $fieldValues = isset($requestData['field_values']) && is_array($requestData['field_values']) ? $requestData['field_values'] : [];
+
+    if (empty($apiName)) {
+        logAttempt('BBCode generation request with empty API name.');
+        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+        exit;
+    }
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
+        logAttempt('BBCode generation request with invalid API name: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Name format.']);
+        exit;
+    }
+
+    $apisDir = ROOT_DIR . '/apis';
+    $apiFilename = $apisDir . '/' . $apiName . '.json';
+
+    if (!file_exists($apiFilename)) {
+        logAttempt('BBCode generation request for non-existent API: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'API schema not found.']);
+        exit;
+    }
+
+    $schemaContent = file_get_contents($apiFilename);
+    $schemaData = json_decode($schemaContent, true);
+
+    if ($schemaData === null || !isset($schemaData['fields']) || !is_array($schemaData['fields'])) {
+        logAttempt('Error reading or invalid structure in API schema JSON for: ' . $apiName);
+        echo json_encode(['success' => false, 'error' => 'Error reading API schema or schema is malformed.']);
+        exit;
+    }
+
+    $generatedFieldsContent = "";
+    foreach ($schemaData['fields'] as $fieldSchema) {
+        $fieldName = $fieldSchema['name'];
+        $fieldWrapper = $fieldSchema['wrapper'] ?? '{field_value}'; // Default if not set
+        $fieldValue = isset($fieldValues[$fieldName]) ? htmlspecialchars($fieldValues[$fieldName], ENT_QUOTES, 'UTF-8') : ''; // Sanitize user input
+
+        // Replace {field_value} in the field's wrapper
+        $processedField = str_replace('{field_value}', $fieldValue, $fieldWrapper);
+        $generatedFieldsContent .= $processedField;
+    }
+
+    $overallWrapper = $schemaData['overall_wrapper'] ?? '{content}'; // Default if not set
+    // Replace {content} with all generated fields
+    $finalBbcode = str_replace('{content}', $generatedFieldsContent, $overallWrapper);
+    // Replace {api_name} with the API's name
+    $finalBbcode = str_replace('{api_name}', htmlspecialchars($schemaData['api_name'], ENT_QUOTES, 'UTF-8'), $finalBbcode);
+
+    logAttempt('Successfully generated BBCode for API: ' . $apiName, false);
+    echo json_encode(['success' => true, 'bbcode' => $finalBbcode]);
+    exit;
+
 } else {
     logAttempt('Invalid request type: ' . $requestType);
     echo json_encode(['success' => false, 'error' => 'Invalid request type.']);

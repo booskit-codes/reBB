@@ -91,6 +91,16 @@ ob_start();
                             </a>
                         </div>
                     </div>
+
+                    <div class="builder-option mt-3">
+                        <h3>API Toolkit</h3>
+                        <div class="builder-buttons">
+                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-action"> <!-- Using btn-info for a different color -->
+                                <i class="bi bi-gear-wide-connected"></i> Create API System
+                                <small>Build custom API endpoints</small>
+                            </a>
+                        </div>
+                    </div>
                 </div>
                 
                 <div id="hashInputContainer" class="hash-input-container">

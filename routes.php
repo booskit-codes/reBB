@@ -205,6 +205,16 @@ if(ENABLE_AUTH) {
 // ===================================
 // API Routes
 // ===================================
+// API Builder page
+get('/api_builder', function() {
+    view('api_builder');
+});
+
+// API Caller page (defining it here for when it's created)
+get('/api_caller', function() {
+    view('api_caller');
+});
+
 // AJAX endpoint for form operations
 any('/ajax', function() {
     view('ajax');
