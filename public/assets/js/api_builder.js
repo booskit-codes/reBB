@@ -25,17 +25,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const fieldNameInput = newField.querySelector('.field-name-input');
         fieldNameInput.name = `fields[${fieldCounter-1}][name]`;
-        fieldNameInput.id = `fieldName_${fieldCounter}`; // For label if needed, though labels are static in current HTML
+        fieldNameInput.id = `fieldName_${fieldCounter}`;
         fieldNameInput.value = '';
-        fieldNameInput.addEventListener('input', () => { // Update wildcards and preview on name change
+        fieldNameInput.addEventListener('input', () => {
             updateAvailableWildcards();
-            throttledUpdateLivePreview();
+            // When field name changes, sample input labels need to update.
+            // Simplest is to regenerate sample inputs, then update preview.
+            debouncedGenerateSampleInputsAndUpdatePreview();
         });
 
         const fieldWrapperInput = newField.querySelector('.field-wrapper-input');
         fieldWrapperInput.name = `fields[${fieldCounter-1}][wrapper]`;
         fieldWrapperInput.value = '';
-        fieldWrapperInput.addEventListener('input', throttledUpdateLivePreview);
+        fieldWrapperInput.addEventListener('input', debouncedUpdateOnlyPreview); // Only update preview text
 
         const multiEntryCheckbox = newField.querySelector('.multi-entry-checkbox');
         multiEntryCheckbox.name = `fields[${fieldCounter-1}][is_multi_entry]`;
@@ -45,31 +47,34 @@ document.addEventListener('DOMContentLoaded', function () {
         const multiEntryWrappersDiv = newField.querySelector('.multi-entry-wrappers');
         multiEntryCheckbox.addEventListener('change', function () {
             multiEntryWrappersDiv.style.display = this.checked ? 'block' : 'none';
-            generatePreviewSampleInputs(); // Regenerate preview inputs on type change
-            throttledUpdateLivePreview();
+            // Structure changed, so regenerate sample inputs then update preview
+            generatePreviewSampleInputs();
+            updateLivePreview(); // Immediate update after structure change
         });
 
         const multiStartWrapperInput = newField.querySelector('.multi-start-wrapper-input');
         multiStartWrapperInput.name = `fields[${fieldCounter-1}][multi_start_wrapper]`;
         multiStartWrapperInput.value = '';
-        multiStartWrapperInput.addEventListener('input', throttledUpdateLivePreview);
+        multiStartWrapperInput.addEventListener('input', debouncedUpdateOnlyPreview); // Only update preview text
 
         const multiEndWrapperInput = newField.querySelector('.multi-end-wrapper-input');
         multiEndWrapperInput.name = `fields[${fieldCounter-1}][multi_end_wrapper]`;
         multiEndWrapperInput.value = '';
-        multiEndWrapperInput.addEventListener('input', throttledUpdateLivePreview);
+        multiEndWrapperInput.addEventListener('input', debouncedUpdateOnlyPreview); // Only update preview text
 
         newField.querySelector('.remove-field-btn').addEventListener('click', function () {
             newField.remove();
             updateAvailableWildcards();
-            generatePreviewSampleInputs(); // Regenerate preview inputs
-            throttledUpdateLivePreview();
+            // Structure changed
+            generatePreviewSampleInputs();
+            updateLivePreview(); // Immediate update
         });
 
         apiFieldsContainer.appendChild(newField);
         updateAvailableWildcards();
-        generatePreviewSampleInputs(); // Regenerate preview inputs
-        throttledUpdateLivePreview();
+        // Structure changed
+        generatePreviewSampleInputs();
+        updateLivePreview(); // Immediate update
     }
 
     // --- Wildcard Display ---
@@ -127,8 +132,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.classList.add('form-control', 'form-control-sm', 'live-preview-sample-value');
-                input.placeholder = `Sample for ${fieldName}`;
-                input.addEventListener('input', throttledUpdateLivePreview);
+                input.placeholder = `Sample for ${fieldName.replace(/_/g, ' ')}`;
+                input.addEventListener('input', debouncedUpdateOnlyPreview); // Only update preview text
                 group.appendChild(input);
             }
             livePreviewSampleInputsContainer.appendChild(group);
@@ -146,22 +151,22 @@ document.addEventListener('DOMContentLoaded', function () {
         const input = document.createElement('input');
         input.type = 'text';
         input.classList.add('form-control', 'form-control-sm', 'live-preview-sample-value');
-        input.placeholder = `Sample item for ${fieldName}`;
+        input.placeholder = `Sample item for ${fieldName.replace(/_/g, ' ')}`;
         input.style.flexGrow = '1';
-        input.addEventListener('input', throttledUpdateLivePreview);
+        input.addEventListener('input', debouncedUpdateOnlyPreview); // Only update preview text
         itemDiv.appendChild(input);
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.classList.add('btn', 'btn-outline-danger', 'btn-sm', 'ms-1');
-        removeBtn.innerHTML = '&times;'; // Using times symbol for remove
+        removeBtn.innerHTML = '&times;';
         removeBtn.addEventListener('click', () => {
             itemDiv.remove();
-            throttledUpdateLivePreview();
+            updateLivePreview(); // Immediate update after removing a sample item
         });
         itemDiv.appendChild(removeBtn);
         container.appendChild(itemDiv);
-        throttledUpdateLivePreview();
+        updateLivePreview(); // Immediate update after adding a sample item
     }
 
 
@@ -219,30 +224,35 @@ document.addEventListener('DOMContentLoaded', function () {
         livePreviewOutputTextarea.value = mainTemplate;
     }
 
-    function throttledUpdateLivePreview() {
+    // Debounce wrapper for functions that only update the preview text
+    function debouncedUpdateOnlyPreview() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(updateLivePreview, 300);
+    }
+
+    // Debounce wrapper for functions that regenerate sample inputs and then update preview text
+    function debouncedGenerateSampleInputsAndUpdatePreview() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            generatePreviewSampleInputs(); // Ensure sample inputs are up-to-date before previewing
+            generatePreviewSampleInputs();
             updateLivePreview();
-        }, 300); // 300ms debounce
+        }, 300);
     }
 
 
     // --- Initial Setup ---
     if (addFieldBtn) {
         addFieldBtn.addEventListener('click', () => {
+            // addField itself calls generatePreviewSampleInputs and updateLivePreview
             addField();
         });
     }
-    addField(); // Add one initial field on page load
-    updateAvailableWildcards();
-    generatePreviewSampleInputs();
-    updateLivePreview();
+    addField(); // Add one initial field on page load which also triggers first preview
 
     if (mainBbcodeTemplateInput) {
-        mainBbcodeTemplateInput.addEventListener('input', throttledUpdateLivePreview);
+        mainBbcodeTemplateInput.addEventListener('input', debouncedUpdateOnlyPreview);
     }
-     document.getElementById('apiName').addEventListener('input', throttledUpdateLivePreview);
+    document.getElementById('apiName').addEventListener('input', debouncedUpdateOnlyPreview);
 
 
     // --- Form Submission ---
