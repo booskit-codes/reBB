@@ -1,32 +1,30 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const selectApiElement = document.getElementById('selectedApi');
-    const apiCallForm = document.getElementById('apiCallForm');
-    const apiInputFieldsContainer = document.getElementById('apiInputFieldsContainer');
-    const currentApiNameElement = document.getElementById('currentApiName');
-    const apiOutputContainer = document.getElementById('apiOutputContainer');
-    const generatedBbcodeElement = document.getElementById('generatedBbcode');
-    const copyBbcodeBtn = document.getElementById('copyBbcodeBtn');
-    const noApiSelectedMessage = document.getElementById('noApiSelectedMessage');
+    // const selectApiElement = document.getElementById('selectedApi'); // No longer exists
+    const apiCallForm = document.getElementById('apiCallForm'); // Might not exist if API load fails
+    const apiInputFieldsContainer = document.getElementById('apiInputFieldsContainer'); // Might not exist
+    const currentApiNameElement = document.getElementById('currentApiNameLoading'); // Renamed in PHP, might not exist
+    const apiOutputContainer = document.getElementById('apiOutputContainer'); // Might not exist
+    const generatedBbcodeElement = document.getElementById('generatedBbcode'); // Might not exist
+    const copyBbcodeBtn = document.getElementById('copyBbcodeBtn'); // Might not exist
+    // const noApiSelectedMessage = document.getElementById('noApiSelectedMessage'); // No longer exists
 
-    let currentSelectedApi = null;
+    let currentSelectedApi = null; // This will be the api_identifier from URL
 
-    if (selectApiElement) {
-        selectApiElement.addEventListener('change', function () {
-            currentSelectedApi = this.value;
-            if (currentSelectedApi) {
-                loadApiFields(currentSelectedApi);
-                noApiSelectedMessage.style.display = 'none';
-                apiCallForm.style.display = 'block';
-                apiOutputContainer.style.display = 'none'; // Hide previous output
-                generatedBbcodeElement.value = ''; // Clear previous output
-            } else {
-                apiInputFieldsContainer.innerHTML = ''; // Clear fields
-                currentApiNameElement.textContent = '';
-                apiCallForm.style.display = 'none';
-                noApiSelectedMessage.style.display = 'block';
-                apiOutputContainer.style.display = 'none';
-            }
-        });
+    // Load API fields if an identifier is provided by PHP
+    // Ensure `apiIdentifierToLoad` is defined by PHP script block before this script runs.
+    if (typeof apiIdentifierToLoad !== 'undefined' && apiIdentifierToLoad) {
+        currentSelectedApi = apiIdentifierToLoad;
+        if (apiCallForm && apiInputFieldsContainer) { // Check if form elements are on page
+             loadApiFields(currentSelectedApi);
+        } else if (!apiCallForm || !apiInputFieldsContainer) {
+            // This case implies PHP determined an error before rendering the form,
+            // so JS doesn't need to do much other than not erroring out.
+            console.log("API Caller form elements not found, likely due to PHP error message.");
+        }
+    } else {
+        // If apiIdentifierToLoad is not set, PHP should have displayed an error message.
+        // We can hide the form if it somehow got rendered without an API.
+        if(apiCallForm) apiCallForm.style.display = 'none';
     }
 
     function addMultiEntryInputItem(container, fieldName, isFirstItem = false) {
@@ -73,8 +71,11 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(result => {
             if (result.success && result.schema && result.schema.fields) {
-                currentApiNameElement.textContent = `API: ${result.schema.api_name.replace(/_/g, ' ')}`;
-                apiInputFieldsContainer.innerHTML = ''; // Clear previous fields
+                // Update API display name, using the 'display_name' from schema
+                if(currentApiNameElement) {
+                    currentApiNameElement.textContent = `API: ${result.schema.display_name || result.schema.api_identifier.replace(/_/g, ' ')}`;
+                }
+                apiInputFieldsContainer.innerHTML = ''; // Clear "Loading fields..." message or previous fields
 
                 result.schema.fields.forEach((field, index) => {
                     const fieldGroup = document.createElement('div');

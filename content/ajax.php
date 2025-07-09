@@ -1019,25 +1019,23 @@ if ($requestType === 'schema') {
     //     exit;
     // }
 
-    $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
-    // $overallWrapper = isset($requestData['overall_wrapper']) ? $requestData['overall_wrapper'] : ''; // Old field
+    $userProvidedApiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // This is the display name
     $mainBbcodeTemplate = isset($requestData['main_bbcode_template']) ? $requestData['main_bbcode_template'] : '';
     $fields = isset($requestData['fields']) && is_array($requestData['fields']) ? $requestData['fields'] : [];
 
-    if (empty($apiName)) {
-        logAttempt('API schema save attempt with empty API name.');
-        echo json_encode(['success' => false, 'error' => 'API Name is required.']);
+    if (empty($userProvidedApiName)) {
+        logAttempt('API schema save attempt with empty API display name.');
+        echo json_encode(['success' => false, 'error' => 'API Name (for display) is required.']);
         exit;
     }
 
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $apiName)) {
-        logAttempt('API schema save attempt with invalid API name: ' . $apiName);
-        echo json_encode(['success' => false, 'error' => 'API Name can only contain letters, numbers, and underscores.']);
-        exit;
-    }
+    // User provided name can be more flexible, but we'll still use a sanitized version for {api_name} if needed.
+    // For now, the internal 'api_name' for replacement will be the user-provided one.
+    $internalApiName = $userProvidedApiName;
+
 
     if (empty($fields)) {
-        logAttempt('API schema save attempt with no fields for API: ' . $apiName);
+        logAttempt('API schema save attempt with no fields for API: ' . $userProvidedApiName);
         echo json_encode(['success' => false, 'error' => 'At least one field is required for the API.']);
         exit;
     }
@@ -1045,18 +1043,16 @@ if ($requestType === 'schema') {
     $cleanedFields = [];
     foreach ($fields as $field) {
         if (isset($field['name']) && !empty(trim($field['name']))) {
-            // Sanitize field name: ensure it's a valid slug-like string
             $fieldName = strtolower(trim($field['name']));
             $fieldName = preg_replace('/[^a-z0-9_]+/', '_', $fieldName);
             $fieldName = trim($fieldName, '_');
 
             if (empty($fieldName)) {
-                // Skip if field name becomes empty after sanitization
                 continue;
             }
 
             $cleanedFields[] = [
-                'name' => $fieldName,
+                'name' => $fieldName, // This is the slug used for {placeholder}
                 'individual_wrapper' => isset($field['individual_wrapper']) ? $field['individual_wrapper'] : '{field_value}',
                 'is_multi_entry' => isset($field['is_multi_entry']) ? filter_var($field['is_multi_entry'], FILTER_VALIDATE_BOOLEAN) : false,
                 'multi_start_wrapper' => isset($field['multi_start_wrapper']) ? $field['multi_start_wrapper'] : '',
@@ -1066,18 +1062,24 @@ if ($requestType === 'schema') {
     }
 
     if (empty($cleanedFields)) {
-        logAttempt('API schema save attempt with no valid fields after cleaning for API: ' . $apiName);
+        logAttempt('API schema save attempt with no valid fields after cleaning for API: ' . $userProvidedApiName);
         echo json_encode(['success' => false, 'error' => 'No valid fields provided. Each field must have a valid name.']);
         exit;
     }
 
+    // Generate random string for filename
+    $randomString = bin2hex(random_bytes(8)); // 16 characters long
+    $apiIdentifier = 'api_' . $randomString;
+
     $apiSchema = [
-        'api_name' => $apiName,
-        'main_bbcode_template' => $mainBbcodeTemplate, // Use new field name
+        'api_identifier' => $apiIdentifier, // Store the identifier used for the filename
+        'display_name' => $userProvidedApiName, // User-friendly name
+        'api_name_placeholder' => $internalApiName, // Name to be used for {api_name} wildcard in template
+        'main_bbcode_template' => $mainBbcodeTemplate,
         'fields' => $cleanedFields,
         'created_at' => time(),
-        'updated_at' => time(), // Add updated_at timestamp
-        // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest' // Optional: track creator
+        'updated_at' => time(),
+        // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest'
     ];
 
     $apisDir = ROOT_DIR . '/apis';
@@ -1089,17 +1091,15 @@ if ($requestType === 'schema') {
         }
     }
 
-    $apiFilename = $apisDir . '/' . $apiName . '.json';
+    // Use the new identifier for the filename
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
 
-    if (file_exists($apiFilename)) {
-        // Optional: Add logic to prevent overwriting or require confirmation
-        // For now, we will overwrite.
-        logAttempt('Overwriting existing API schema: ' . $apiName);
-    }
+    // We assume new APIs don't overwrite based on random name, but a duplicate random is astronomically small.
+    // If it were to happen, file_put_contents would overwrite. A loop with file_exists could prevent this if necessary.
 
     if (file_put_contents($apiFilename, json_encode($apiSchema, JSON_PRETTY_PRINT))) {
-        logAttempt('Successfully saved API schema: ' . $apiName, false);
-        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_name' => $apiName]);
+        logAttempt('Successfully saved API schema: ' . $userProvidedApiName . ' with ID: ' . $apiIdentifier, false);
+        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_identifier' => $apiIdentifier, 'display_name' => $userProvidedApiName]);
     } else {
         logAttempt('Failed to write API schema to file: ' . $apiFilename);
         echo json_encode(['success' => false, 'error' => 'Server error: Could not save API schema.']);

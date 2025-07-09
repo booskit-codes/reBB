@@ -305,7 +305,40 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    alert(result.message || 'API Schema saved successfully!');
+                    let successMessage = (result.message || 'API Schema saved successfully!') +
+                                       `\nDisplay Name: ${result.display_name}` +
+                                       `\nAPI Identifier: ${result.api_identifier}`;
+
+                    // Attempt to get base URL for api_caller link construction
+                    // This assumes site_url() functionality or a global base URL variable might be available or needed.
+                    // For simplicity, using a relative path. A robust solution might need `siteUrl` from PHP like in api_caller.php.
+                    let apiCallerBaseUrl = './api_caller'; // Simple relative path
+                    try {
+                        // If a global site_url function or variable is exposed from PHP to JS, use it.
+                        // For example, if PHP set <script>var baseSiteUrl = "<?php echo site_url(); ?>";</script>
+                        if (typeof baseSiteUrl !== 'undefined') {
+                            apiCallerBaseUrl = baseSiteUrl + (baseSiteUrl.endsWith('/') ? '' : '/') + 'api_caller';
+                        } else {
+                             // Fallback if PHP did not provide a global var.
+                             // Constructing a relative URL assuming api_builder and api_caller are in the same directory.
+                             // Or, if your routing handles 'api_caller' directly from root:
+                             const currentPath = window.location.pathname;
+                             const pathSegments = currentPath.split('/');
+                             pathSegments.pop(); // remove current file/page
+                             // if (pathSegments.length > 0 && pathSegments[pathSegments.length -1] === 'content') {
+                             //    pathSegments.pop(); // if it's inside a /content/ directory, go up one more
+                             // }
+                             // This is a guess, a proper site_url JS equivalent would be better.
+                             // For now, using a simpler relative URL that might work depending on server setup.
+                             apiCallerBaseUrl = 'api_caller';
+                        }
+                    } catch (e) { /* ignore if baseSiteUrl is not defined */ }
+
+                    const callerUrl = `${apiCallerBaseUrl}?api=${result.api_identifier}`;
+                    successMessage += `\n\nAccess it at: ${callerUrl}`;
+
+                    alert(successMessage);
+                    // Optionally, you could also create a clickable link in a non-alert element.
                 } else {
                     alert('Error: ' + (result.error || 'Could not save API Schema.'));
                 }

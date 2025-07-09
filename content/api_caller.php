@@ -8,84 +8,76 @@
 // Define the page content to be yielded in the master layout
 ob_start();
 
-$apisDir = ROOT_DIR . '/apis';
-$apiFiles = [];
-if (is_dir($apisDir)) {
-    $files = scandir($apisDir);
-    foreach ($files as $file) {
-        if (pathinfo($file, PATHINFO_EXTENSION) === 'json') {
-            $apiFiles[] = pathinfo($file, PATHINFO_FILENAME);
+$apiIdentifier = null;
+$apiSchemaExists = false;
+$errorMessage = '';
+$page_js_vars_array = ['ajaxUrl' => site_url('ajax')]; // Initialize with ajaxUrl
+
+if (isset($_GET['api'])) {
+    $apiIdentifier = trim($_GET['api']);
+    // Validate the identifier format (api_ followed by alphanumeric)
+    if (preg_match('/^api_[a-zA-Z0-9]+$/', $apiIdentifier)) {
+        $apisDir = ROOT_DIR . '/apis';
+        $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+        if (file_exists($apiFilename)) {
+            $apiSchemaExists = true;
+            // Pass the identifier to JavaScript so it can fetch the schema details
+            $page_js_vars_array['apiIdentifierToLoad'] = $apiIdentifier;
+        } else {
+            $errorMessage = "API schema not found for identifier: " . htmlspecialchars($apiIdentifier);
         }
+    } else {
+        $errorMessage = "Invalid API identifier format provided.";
     }
+} else {
+    $errorMessage = "No API specified. Please provide an API identifier in the URL (e.g., ?api=api_youridentifier).";
 }
-sort($apiFiles);
 
 ?>
 
 <div class="container mt-5">
     <h1>API Caller</h1>
-    <p>Select an API, fill in the fields, and generate the BBCode.</p>
 
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    Select API
-                </div>
-                <div class="card-body">
-                    <?php if (empty($apiFiles)): ?>
-                        <p class="text-muted">No API schemas found in the '<?php echo basename($apisDir); ?>' directory. <a href="<?php echo site_url('api_builder'); ?>">Create one first!</a></p>
-                    <?php else: ?>
-                        <form id="selectApiForm">
-                            <div class="mb-3">
-                                <label for="selectedApi" class="form-label">Available APIs:</label>
-                                <select class="form-select" id="selectedApi" name="selected_api">
-                                    <option value="">-- Select an API --</option>
-                                    <?php foreach ($apiFiles as $apiName): ?>
-                                        <option value="<?php echo htmlspecialchars($apiName); ?>"><?php echo htmlspecialchars(str_replace('_', ' ', ucfirst($apiName))); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </form>
-                    <?php endif; ?>
+    <?php if ($errorMessage): ?>
+        <div class="alert alert-danger">
+            <?php echo $errorMessage; ?>
+            <?php if (!isset($_GET['api']) || empty($_GET['api'])): ?>
+                 You can <a href="<?php echo site_url('api_builder'); ?>">create a new API</a> or check the <a href="<?php echo site_url('api_docs'); ?>">API Documentation</a> for available API identifiers.
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($apiSchemaExists): ?>
+        <p>Fill in the fields for the loaded API and generate the BBCode.</p>
+        <div class="card">
+            <div class="card-header">
+                <h3 id="currentApiNameLoading">Loading API Details...</h3> <!-- JS will update this -->
+            </div>
+            <div class="card-body">
+                <form id="apiCallForm"> <!-- Initially visible, JS will populate or hide if error -->
+                    <div id="apiInputFieldsContainer" class="mb-3">
+                        <!-- Dynamic input fields will be loaded here by JS -->
+                        <p class="text-muted">Loading fields...</p>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-code-square"></i> Generate BBCode
+                    </button>
+                </form>
+
+                <div id="apiOutputContainer" class="mt-4" style="display: none;">
+                    <h4>Generated BBCode:</h4>
+                    <textarea id="generatedBbcode" class="form-control" rows="10" readonly></textarea>
+                    <button id="copyBbcodeBtn" class="btn btn-sm btn-secondary mt-2">
+                        <i class="bi bi-clipboard"></i> Copy to Clipboard
+                    </button>
                 </div>
             </div>
         </div>
+    <?php endif; ?>
 
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    API Fields & Output
-                </div>
-                <div class="card-body">
-                    <form id="apiCallForm" style="display: none;"> <!-- Hidden until an API is selected -->
-                        <h3 id="currentApiName"></h3>
-                        <div id="apiInputFieldsContainer" class="mb-3">
-                            <!-- Dynamic input fields will be loaded here -->
-                        </div>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-code-square"></i> Generate BBCode
-                        </button>
-                    </form>
-
-                    <div id="apiOutputContainer" class="mt-4" style="display: none;">
-                        <h4>Generated BBCode:</h4>
-                        <textarea id="generatedBbcode" class="form-control" rows="10" readonly></textarea>
-                        <button id="copyBbcodeBtn" class="btn btn-sm btn-secondary mt-2">
-                            <i class="bi bi-clipboard"></i> Copy to Clipboard
-                        </button>
-                    </div>
-
-                    <div id="noApiSelectedMessage" class="text-muted">
-                        <p>Please select an API from the list to see its fields.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
      <div class="mt-4">
         <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-outline-secondary">
-            <i class="bi bi-pencil-square"></i> Back to API Builder
+            <i class="bi bi-pencil-square"></i> Go to API Builder
         </a>
     </div>
 </div>
@@ -98,8 +90,11 @@ $GLOBALS['page_content'] = ob_get_clean();
 // $GLOBALS['page_css'] = '<link rel="stylesheet" href="'. asset_path('css/pages/api-caller.css') .'?v=' . APP_VERSION . '">';
 
 // Add page-specific JavaScript
-// We'll create api_caller.js in a subsequent step
-$GLOBALS['page_js_vars'] = "var ajaxUrl = '" . site_url('ajax') . "';"; // Pass ajax URL to JS
+$jsVarsString = "";
+foreach ($page_js_vars_array as $key => $value) {
+    $jsVarsString .= "var " . $key . " = " . json_encode($value) . ";\n";
+}
+$GLOBALS['page_js_vars'] = $jsVarsString;
 $GLOBALS['page_javascript'] = '<script src="'. asset_path('js/api_caller.js') .'?v=' . APP_VERSION . '"></script>';
 
 
