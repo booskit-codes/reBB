@@ -1135,11 +1135,11 @@ if ($requestType === 'schema') {
     $schemaData = json_decode($schemaContent, true);
 
     if ($schemaData === null) {
-        logAttempt('Failed to decode API schema JSON for: ' . $apiName);
+        logAttempt('Failed to decode API schema JSON for: ' . $apiIdentifier); // Corrected variable
         echo json_encode(['success' => false, 'error' => 'Error reading API schema.']);
         exit;
     }
-    logAttempt('Successfully fetched API schema details for: ' . $apiName, false);
+    logAttempt('Successfully fetched API schema details for: ' . $apiIdentifier, false); // Corrected variable
     echo json_encode(['success' => true, 'schema' => $schemaData]);
     exit;
 
