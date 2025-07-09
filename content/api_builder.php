@@ -26,32 +26,64 @@ ob_start();
                 </div>
 
                 <div class="mb-3">
-                    <label for="overallWrapper" class="form-label">Overall BBCode Wrapper</label>
-                    <textarea class="form-control" id="overallWrapper" name="overall_wrapper" rows="3" placeholder="e.g., [section={api_name}]{content}[/section]"></textarea>
-                    <div class="form-text">Use <code>{api_name}</code> for the API name and <code>{content}</code> for the combined fields.</div>
+                    <label for="mainBbcodeTemplate" class="form-label">Main BBCode Template</label>
+                    <textarea class="form-control" id="mainBbcodeTemplate" name="main_bbcode_template" rows="4" placeholder="e.g., [article={api_name}]\n{title}\n{content_body}\n[/article]"></textarea>
+                    <div class="form-text">
+                        Use <code>{api_name}</code> for the API name. Available field wildcards: <code id="availableWildcardsDisplay">(none yet)</code>.
+                        These wildcards (e.g. <code>{field_name}</code>) will be replaced by the processed content of each corresponding field.
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="card mb-3">
             <div class="card-header">
-                API Fields
+                API Fields Definition
             </div>
             <div class="card-body">
                 <div id="apiFieldsContainer">
                     <!-- Fields will be added here by JavaScript -->
-                    <div class="api-field-template mb-3 p-3 border rounded" style="display: none;">
-                        <h5>Field <span class="field-number">1</span></h5>
-                        <div class="mb-3">
-                            <label for="fieldName_1" class="form-label">Field Name</label>
-                            <input type="text" class="form-control field-name-input" name="fields[0][name]" placeholder="e.g., character_name">
+                    <div class="api-field-template mb-4 p-3 border rounded shadow-sm" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5>Field <span class="field-number">1</span></h5>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-field-btn">
+                                <i class="bi bi-trash"></i> Remove Field
+                            </button>
                         </div>
-                        <div class="mb-3">
-                            <label for="fieldWrapper_1" class="form-label">Field BBCode Wrapper</label>
-                            <textarea class="form-control field-wrapper-input" name="fields[0][wrapper]" rows="2" placeholder="e.g., [b]{field_value}[/b] or [param={field_value}]Default Text[/param]"></textarea>
-                            <div class="form-text">Use <code>{field_value}</code> for the user-supplied value for this field.</div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Field Name</label>
+                                <input type="text" class="form-control field-name-input" name="fields[0][name]" placeholder="e.g., character_name (no spaces/special chars)">
+                                <div class="form-text">Used as the wildcard in the Main BBCode Template (e.g. <code>{character_name}</code>).</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Individual Item BBCode Wrapper</label>
+                                <textarea class="form-control field-wrapper-input" name="fields[0][wrapper]" rows="2" placeholder="e.g., [b]{field_value}[/b]"></textarea>
+                                <div class="form-text">Wraps each value/item. Use <code>{field_value}</code>.</div>
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-danger remove-field-btn">Remove Field</button>
+
+                        <div class="form-check mb-2">
+                            <input class="form-check-input multi-entry-checkbox" type="checkbox" value="" id="multiEntryCheck_0">
+                            <label class="form-check-label" for="multiEntryCheck_0">
+                                Multi-entry Field (allows multiple values for this field)
+                            </label>
+                        </div>
+
+                        <div class="multi-entry-wrappers" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Multi-entry Start Wrapper</label>
+                                    <input type="text" class="form-control multi-start-wrapper-input" name="fields[0][multi_start_wrapper]" placeholder="e.g., [list]">
+                                    <div class="form-text">Appears once before all items of this multi-entry field.</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Multi-entry End Wrapper</label>
+                                    <input type="text" class="form-control multi-end-wrapper-input" name="fields[0][multi_end_wrapper]" placeholder="e.g., [/list]">
+                                    <div class="form-text">Appears once after all items of this multi-entry field.</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <button type="button" id="addFieldBtn" class="btn btn-success">
@@ -60,7 +92,28 @@ ob_start();
             </div>
         </div>
 
-        <div class="mt-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                Live Preview
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Sample Inputs</h5>
+                        <div id="livePreviewSampleInputsContainer" class="p-2 border rounded bg-light" style="min-height: 100px;">
+                            <p class="text-muted placeholder-text">Define fields above to see sample inputs here.</p>
+                            <!-- Sample inputs will be dynamically generated here by JS -->
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Preview Output</h5>
+                        <textarea id="livePreviewOutput" class="form-control" rows="10" readonly placeholder="BBCode preview will appear here..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 mb-5">
             <button type="submit" class="btn btn-primary btn-lg">
                 <i class="bi bi-save"></i> Save API Schema
             </button>
@@ -79,7 +132,8 @@ $GLOBALS['page_content'] = ob_get_clean();
 // $GLOBALS['page_css'] = '<link rel="stylesheet" href="'. asset_path('css/pages/api-builder.css') .'?v=' . APP_VERSION . '">';
 
 // Add page-specific JavaScript
-$GLOBALS['page_js_vars'] = ""; // No specific JS vars needed for now from PHP
+// ajaxUrl will be used by api_builder.js for fetching/posting
+$GLOBALS['page_js_vars'] = "var ajaxUrl = '" . site_url('ajax') . "';";
 $GLOBALS['page_javascript'] = '<script src="'. asset_path('js/api_builder.js') .'?v=' . APP_VERSION . '"></script>';
 
 // Include the master layout

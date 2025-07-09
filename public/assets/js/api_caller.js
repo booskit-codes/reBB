@@ -29,6 +29,35 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function addMultiEntryInputItem(container, fieldName, isFirstItem = false) {
+        const itemDiv = document.createElement('div');
+        itemDiv.classList.add('d-flex', 'mb-1', 'multi-entry-item');
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.classList.add('form-control', 'form-control-sm', 'api-field-value'); // Shared class for value retrieval
+        input.name = `${fieldName}[]`; // Use array notation for name
+        input.placeholder = `Enter item for ${fieldName.replace(/_/g, ' ')}`;
+        input.style.flexGrow = '1';
+        itemDiv.appendChild(input);
+
+        if (!isFirstItem) { // Only add remove button for non-first items, or always add if you prefer
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.classList.add('btn', 'btn-outline-danger', 'btn-sm', 'ms-1');
+            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+            removeBtn.title = "Remove item";
+            removeBtn.addEventListener('click', () => {
+                itemDiv.remove();
+            });
+            itemDiv.appendChild(removeBtn);
+        } else {
+            // Optionally add a non-functional placeholder or a different button for the first item
+            // Or simply ensure the first item cannot be removed this way easily
+        }
+        container.appendChild(itemDiv);
+    }
+
     function loadApiFields(apiName) {
         fetch(ajaxUrl, { // ajaxUrl should be defined globally in the PHP template
             method: 'POST',
@@ -46,29 +75,49 @@ document.addEventListener('DOMContentLoaded', function () {
             if (result.success && result.schema && result.schema.fields) {
                 currentApiNameElement.textContent = `API: ${result.schema.api_name.replace(/_/g, ' ')}`;
                 apiInputFieldsContainer.innerHTML = ''; // Clear previous fields
-                result.schema.fields.forEach(field => {
+
+                result.schema.fields.forEach((field, index) => {
                     const fieldGroup = document.createElement('div');
-                    fieldGroup.classList.add('mb-3');
+                    fieldGroup.classList.add('mb-3', 'api-field-group');
+                    fieldGroup.dataset.fieldName = field.name;
+                    fieldGroup.dataset.isMultiEntry = field.is_multi_entry || false;
 
                     const label = document.createElement('label');
                     label.classList.add('form-label');
-                    label.htmlFor = `api_field_${field.name}`;
+                    // No htmlFor here as ID might be complex for multi-entry
                     label.textContent = field.name.replace(/_/g, ' ') + ':';
-
-                    const input = document.createElement('input');
-                    input.type = 'text'; // For simplicity, all fields are text for now
-                    input.classList.add('form-control');
-                    input.id = `api_field_${field.name}`;
-                    input.name = field.name; // Use field name as input name
-                    input.placeholder = `Enter value for ${field.name}`;
-
                     fieldGroup.appendChild(label);
-                    fieldGroup.appendChild(input);
+
+                    if (field.is_multi_entry) {
+                        const itemsContainer = document.createElement('div');
+                        itemsContainer.classList.add('multi-entry-items-container');
+                        itemsContainer.id = `multi-items-container-${field.name}`;
+
+                        addMultiEntryInputItem(itemsContainer, field.name, true); // Add one initial item
+
+                        const addItemBtn = document.createElement('button');
+                        addItemBtn.type = 'button';
+                        addItemBtn.classList.add('btn', 'btn-outline-success', 'btn-sm', 'mt-1');
+                        addItemBtn.innerHTML = '<i class="bi bi-plus-circle"></i> Add Item';
+                        addItemBtn.addEventListener('click', () => addMultiEntryInputItem(itemsContainer, field.name));
+
+                        fieldGroup.appendChild(itemsContainer);
+                        fieldGroup.appendChild(addItemBtn);
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.classList.add('form-control', 'api-field-value');
+                        input.id = `api_field_${field.name}`;
+                        input.name = field.name;
+                        input.placeholder = `Enter value for ${field.name}`;
+                        fieldGroup.appendChild(input);
+                    }
                     apiInputFieldsContainer.appendChild(fieldGroup);
                 });
                 apiCallForm.style.display = 'block';
             } else {
                 alert('Error loading API fields: ' + (result.error || 'Unknown error'));
+                currentApiNameElement.textContent = '';
                 apiInputFieldsContainer.innerHTML = '<p class="text-danger">Could not load fields for this API.</p>';
                 apiCallForm.style.display = 'none';
             }
@@ -89,12 +138,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const formData = new FormData(apiCallForm);
             const fieldValues = {};
-            // FormData in this case directly gives field_name: value pairs due to input names
-            for (let [name, value] of formData.entries()) {
-                fieldValues[name] = value;
-            }
+            apiInputFieldsContainer.querySelectorAll('.api-field-group').forEach(group => {
+                const fieldName = group.dataset.fieldName;
+                const isMulti = group.dataset.isMultiEntry === 'true';
+
+                if (isMulti) {
+                    fieldValues[fieldName] = [];
+                    group.querySelectorAll('.multi-entry-item .api-field-value').forEach(input => {
+                        if (input.value.trim() !== '') { // Only add non-empty values
+                            fieldValues[fieldName].push(input.value);
+                        }
+                    });
+                } else {
+                    const input = group.querySelector('.api-field-value');
+                    if (input) {
+                        fieldValues[fieldName] = input.value;
+                    }
+                }
+            });
 
             fetch(ajaxUrl, {
                 method: 'POST',

@@ -1020,7 +1020,8 @@ if ($requestType === 'schema') {
     // }
 
     $apiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null;
-    $overallWrapper = isset($requestData['overall_wrapper']) ? $requestData['overall_wrapper'] : '';
+    // $overallWrapper = isset($requestData['overall_wrapper']) ? $requestData['overall_wrapper'] : ''; // Old field
+    $mainBbcodeTemplate = isset($requestData['main_bbcode_template']) ? $requestData['main_bbcode_template'] : '';
     $fields = isset($requestData['fields']) && is_array($requestData['fields']) ? $requestData['fields'] : [];
 
     if (empty($apiName)) {
@@ -1044,28 +1045,42 @@ if ($requestType === 'schema') {
     $cleanedFields = [];
     foreach ($fields as $field) {
         if (isset($field['name']) && !empty(trim($field['name']))) {
+            // Sanitize field name: ensure it's a valid slug-like string
+            $fieldName = strtolower(trim($field['name']));
+            $fieldName = preg_replace('/[^a-z0-9_]+/', '_', $fieldName);
+            $fieldName = trim($fieldName, '_');
+
+            if (empty($fieldName)) {
+                // Skip if field name becomes empty after sanitization
+                continue;
+            }
+
             $cleanedFields[] = [
-                'name' => trim($field['name']),
-                'wrapper' => isset($field['wrapper']) ? $field['wrapper'] : '{field_value}' // Default wrapper
+                'name' => $fieldName,
+                'individual_wrapper' => isset($field['individual_wrapper']) ? $field['individual_wrapper'] : '{field_value}',
+                'is_multi_entry' => isset($field['is_multi_entry']) ? filter_var($field['is_multi_entry'], FILTER_VALIDATE_BOOLEAN) : false,
+                'multi_start_wrapper' => isset($field['multi_start_wrapper']) ? $field['multi_start_wrapper'] : '',
+                'multi_end_wrapper' => isset($field['multi_end_wrapper']) ? $field['multi_end_wrapper'] : ''
             ];
         }
     }
 
     if (empty($cleanedFields)) {
         logAttempt('API schema save attempt with no valid fields after cleaning for API: ' . $apiName);
-        echo json_encode(['success' => false, 'error' => 'No valid fields provided. Each field must have a name.']);
+        echo json_encode(['success' => false, 'error' => 'No valid fields provided. Each field must have a valid name.']);
         exit;
     }
 
     $apiSchema = [
         'api_name' => $apiName,
-        'overall_wrapper' => $overallWrapper,
+        'main_bbcode_template' => $mainBbcodeTemplate, // Use new field name
         'fields' => $cleanedFields,
         'created_at' => time(),
+        'updated_at' => time(), // Add updated_at timestamp
         // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest' // Optional: track creator
     ];
 
-    $apisDir = ROOT_DIR . '/apis'; // Changed from STORAGE_DIR to ROOT_DIR based on plan
+    $apisDir = ROOT_DIR . '/apis';
     if (!is_dir($apisDir)) {
         if (!mkdir($apisDir, 0755, true)) {
             logAttempt('Failed to create apis directory: ' . $apisDir);
@@ -1153,28 +1168,59 @@ if ($requestType === 'schema') {
     $schemaContent = file_get_contents($apiFilename);
     $schemaData = json_decode($schemaContent, true);
 
-    if ($schemaData === null || !isset($schemaData['fields']) || !is_array($schemaData['fields'])) {
+    // Check for the new main_bbcode_template and overall structure
+    if ($schemaData === null || !isset($schemaData['main_bbcode_template']) || !isset($schemaData['fields']) || !is_array($schemaData['fields'])) {
         logAttempt('Error reading or invalid structure in API schema JSON for: ' . $apiName);
-        echo json_encode(['success' => false, 'error' => 'Error reading API schema or schema is malformed.']);
+        echo json_encode(['success' => false, 'error' => 'Error reading API schema or schema is malformed. Check main_bbcode_template and fields.']);
         exit;
     }
 
-    $generatedFieldsContent = "";
-    foreach ($schemaData['fields'] as $fieldSchema) {
-        $fieldName = $fieldSchema['name'];
-        $fieldWrapper = $fieldSchema['wrapper'] ?? '{field_value}'; // Default if not set
-        $fieldValue = isset($fieldValues[$fieldName]) ? htmlspecialchars($fieldValues[$fieldName], ENT_QUOTES, 'UTF-8') : ''; // Sanitize user input
+    $mainTemplate = $schemaData['main_bbcode_template'];
 
-        // Replace {field_value} in the field's wrapper
-        $processedField = str_replace('{field_value}', $fieldValue, $fieldWrapper);
-        $generatedFieldsContent .= $processedField;
+    foreach ($schemaData['fields'] as $fieldSchema) {
+        $fieldNameSlug = $fieldSchema['name']; // This is already sanitized on save
+        $placeholder = '{' . $fieldNameSlug . '}';
+        $fieldReplacement = "";
+
+        $individualWrapper = $fieldSchema['individual_wrapper'] ?? '{field_value}';
+        $isMultiEntry = $fieldSchema['is_multi_entry'] ?? false;
+
+        $submittedValue = $fieldValues[$fieldNameSlug] ?? null;
+
+        if ($isMultiEntry) {
+            $multiStartWrapper = $fieldSchema['multi_start_wrapper'] ?? '';
+            $multiEndWrapper = $fieldSchema['multi_end_wrapper'] ?? '';
+            $itemsContent = "";
+
+            if (is_array($submittedValue)) {
+                foreach ($submittedValue as $item) {
+                    $itemValue = htmlspecialchars($item, ENT_QUOTES, 'UTF-8');
+                    $itemsContent .= str_replace('{field_value}', $itemValue, $individualWrapper);
+                }
+            } elseif ($submittedValue !== null) { // Handle case where a single value might be passed for a multi-entry (less ideal)
+                $itemValue = htmlspecialchars($submittedValue, ENT_QUOTES, 'UTF-8');
+                $itemsContent .= str_replace('{field_value}', $itemValue, $individualWrapper);
+            }
+
+            if(!empty($itemsContent) || !empty($multiStartWrapper) || !empty($multiEndWrapper) ) { // only add wrappers if there's content or wrappers themselves
+                $fieldReplacement = $multiStartWrapper . $itemsContent . $multiEndWrapper;
+            }
+
+        } else {
+            $singleValue = is_array($submittedValue) ? ($submittedValue[0] ?? '') : ($submittedValue ?? ''); // Take first if array, or the value itself
+            $singleValue = htmlspecialchars($singleValue, ENT_QUOTES, 'UTF-8');
+            if ($singleValue !== '' || strpos($individualWrapper, '{field_value}') === false ) { // Process if value or wrapper doesn't need value
+                 $fieldReplacement = str_replace('{field_value}', $singleValue, $individualWrapper);
+            }
+        }
+        $mainTemplate = str_replace($placeholder, $fieldReplacement, $mainTemplate);
     }
 
-    $overallWrapper = $schemaData['overall_wrapper'] ?? '{content}'; // Default if not set
-    // Replace {content} with all generated fields
-    $finalBbcode = str_replace('{content}', $generatedFieldsContent, $overallWrapper);
-    // Replace {api_name} with the API's name
-    $finalBbcode = str_replace('{api_name}', htmlspecialchars($schemaData['api_name'], ENT_QUOTES, 'UTF-8'), $finalBbcode);
+    // Final replacement for {api_name}
+    $finalBbcode = str_replace('{api_name}', htmlspecialchars($schemaData['api_name'], ENT_QUOTES, 'UTF-8'), $mainTemplate);
+
+    // Clean up any remaining unmatched field placeholders from the main template
+    $finalBbcode = preg_replace('/{[a-zA-Z0-9_]+}/', '', $finalBbcode);
 
     logAttempt('Successfully generated BBCode for API: ' . $apiName, false);
     echo json_encode(['success' => true, 'bbcode' => $finalBbcode]);
