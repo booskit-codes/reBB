@@ -13,6 +13,10 @@ ob_start();
     <h1>API Builder</h1>
     <p>Define your API structure, fields, and BBCode wrappers.</p>
 
+    <div id="apiBuilderAlertsContainer" class="mt-3">
+        <!-- Dynamic alerts will be injected here by JavaScript -->
+    </div>
+
     <form id="apiBuilderForm">
         <div class="card mb-3">
             <div class="card-header">

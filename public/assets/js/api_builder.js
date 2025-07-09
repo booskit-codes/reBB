@@ -4,10 +4,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const apiBuilderForm = document.getElementById('apiBuilderForm');
     const mainBbcodeTemplateInput = document.getElementById('mainBbcodeTemplate');
     const availableWildcardsDisplay = document.getElementById('availableWildcardsDisplay');
+    const alertsContainer = document.getElementById('apiBuilderAlertsContainer');
 
     const livePreviewSampleInputsContainer = document.getElementById('livePreviewSampleInputsContainer');
     const livePreviewOutputTextarea = document.getElementById('livePreviewOutput');
-    const livePreviewPlaceholderText = livePreviewSampleInputsContainer.querySelector('.placeholder-text');
+    const livePreviewPlaceholderText = livePreviewSampleInputsContainer ? livePreviewSampleInputsContainer.querySelector('.placeholder-text') : null;
 
     let fieldCounter = 0;
     let debounceTimer;
@@ -254,17 +255,71 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     document.getElementById('apiName').addEventListener('input', debouncedUpdateOnlyPreview);
 
+    // --- Alert Function ---
+    function showApiBuilderAlert(message, type = 'info', dismissible = true, autoDismissDelay = 0) {
+        if (!alertsContainer) return;
+
+        alertsContainer.innerHTML = ''; // Clear previous alerts
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} fade show`;
+        alertDiv.setAttribute('role', 'alert');
+
+        if (dismissible) {
+            alertDiv.classList.add('alert-dismissible');
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close';
+            closeButton.setAttribute('data-bs-dismiss', 'alert');
+            closeButton.setAttribute('aria-label', 'Close');
+            alertDiv.appendChild(closeButton);
+        }
+
+        // To handle multi-line messages from \n
+        message.split('\n').forEach((line, index) => {
+            if (index > 0) alertDiv.appendChild(document.createElement('br'));
+            alertDiv.appendChild(document.createTextNode(line));
+        });
+
+        alertsContainer.appendChild(alertDiv);
+
+        if (autoDismissDelay > 0) {
+            setTimeout(() => {
+                // Check if alert still exists before trying to close with Bootstrap's JS
+                if (alertDiv && alertDiv.parentNode) {
+                     // Use Bootstrap's alert instance to close, if available and loaded
+                    const bsAlert = bootstrap.Alert.getInstance(alertDiv);
+                    if (bsAlert) {
+                        bsAlert.close();
+                    } else {
+                        // Fallback if Bootstrap JS for Alert not loaded or alert already removed
+                        alertDiv.remove();
+                    }
+                }
+            }, autoDismissDelay);
+        }
+    }
+
 
     // --- Form Submission ---
     if (apiBuilderForm) {
         apiBuilderForm.addEventListener('submit', function (event) {
             event.preventDefault();
+            showApiBuilderAlert(''); // Clear any previous alerts by passing empty message
 
             const apiNameInput = document.getElementById('apiName');
-            if (!apiNameInput.value.trim().match(/^[a-zA-Z0-9_]+$/)) {
-                alert('API Name is required and can only contain letters, numbers, and underscores.');
+            if (!apiNameInput.value.trim()) { // Simplified check, backend does regex
+                showApiBuilderAlert('API Name (Display Name) is required.', 'danger');
                 apiNameInput.focus();
                 return;
+            }
+            // Backend will validate format: /^[a-zA-Z0-9_]+$/
+            // For now, we only check if it's empty on client side.
+            // Or, we can replicate the regex:
+            if (!apiNameInput.value.trim().match(/^[a-zA-Z0-9_ ]+$/)) {
+                 showApiBuilderAlert('API Name can only contain letters, numbers, spaces, and underscores.', 'danger');
+                 apiNameInput.focus();
+                 return;
             }
 
             const payload = {
@@ -290,7 +345,14 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (!hasAtLeastOneField) {
-                alert('Please define at least one field for the API.');
+                showApiBuilderAlert('Please define at least one field for the API.', 'danger');
+                // Potentially focus the "Add Field" button or the last field name input
+                const lastFieldNameInput = apiFieldsContainer.querySelector('div.border.rounded:not(.api-field-template):last-child .field-name-input');
+                if (lastFieldNameInput) {
+                    lastFieldNameInput.focus();
+                } else {
+                    addFieldBtn.focus();
+                }
                 return;
             }
 
@@ -334,18 +396,17 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     } catch (e) { /* ignore if baseSiteUrl is not defined */ }
 
-                    const callerUrl = `${apiCallerBaseUrl}?api=${result.api_identifier}`;
+                    const callerUrl = `${apiCallerBaseUrl}?api=${result.api_identifier.replace(/^api_/, '')}`; // Use raw hex for URL
                     successMessage += `\n\nAccess it at: ${callerUrl}`;
 
-                    alert(successMessage);
-                    // Optionally, you could also create a clickable link in a non-alert element.
+                    showApiBuilderAlert(successMessage, 'success', true, 7000); // Auto-dismiss after 7 seconds
                 } else {
-                    alert('Error: ' + (result.error || 'Could not save API Schema.'));
+                    showApiBuilderAlert('Error: ' + (result.error || 'Could not save API Schema.'), 'danger', true);
                 }
             })
             .catch(error => {
                 console.error('AJAX Error:', error);
-                alert('An unexpected error occurred while saving. Please check the console.');
+                showApiBuilderAlert('An unexpected error occurred while saving. Please check the console.', 'danger', true);
             });
         });
     }
