@@ -350,6 +350,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // --- Handle Organization Deletion ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_organization']) && isset($_POST['organization_id_to_delete'])) {
     $orgIdToDelete = $_POST['organization_id_to_delete'];
+
+    // Ensure DB stores are initialized within this POST scope
+    $dbPath = ROOT_DIR . '/db';
+    if (!isset($organizationsStore) || !is_object($organizationsStore)) {
+        $organizationsStore = new \SleekDB\Store('organizations', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+    }
+    if (!isset($orgMembersStore) || !is_object($orgMembersStore)) {
+        $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+    }
+    if (!isset($userOrgStore) || !is_object($userOrgStore)) {
+        $userOrgStore = new \SleekDB\Store('user_to_organization_links', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+    }
+    // $usersStore is used by logOrganizationAdminAction, ensure it's available if not already
+    if (!isset($usersStore) || !is_object($usersStore)) {
+        $usersStore = new \SleekDB\Store('users', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+    }
+
     if (empty($orgIdToDelete)) {
         $actionMessage = "Organization ID missing for deletion.";
         $actionMessageType = 'danger';

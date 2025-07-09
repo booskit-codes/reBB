@@ -275,6 +275,12 @@ if(ENABLE_AUTH) {
         auth()->requireRole(Auth::ROLE_ADMIN, 'login');
         view('admin/organizations');
     });
+
+    // Admin Form JSON Editor page
+    any('/admin/forms/edit-json', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN, 'login'); // Expects ?form_id=XYZ
+        view('admin/form_json_editor');
+    });
 }
 
 // ===================================

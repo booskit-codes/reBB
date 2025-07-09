@@ -756,6 +756,9 @@ ob_start();
                                                 data-formname="<?php echo htmlspecialchars($form['name'] ?: 'Unnamed Form'); ?>">
                                             <i class="bi bi-trash"></i> Delete
                                         </button>
+                                        <a href="<?php echo site_url('admin/forms/edit-json?form_id=') . htmlspecialchars($form['id']); ?>" class="btn btn-sm btn-outline-warning ms-1" title="Edit JSON">
+                                            <i class="bi bi-filetype-json"></i>
+                                        </a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
