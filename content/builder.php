@@ -49,10 +49,40 @@ if (isset($_GET['f']) && !empty($_GET['f'])) {
                 $formWidth = isset($formData['formWidth']) ? $formData['formWidth'] : 45;
                 $formCreator = isset($formData['createdBy']) ? $formData['createdBy'] : null;
 
-                // Check if the current user is the creator of this form
+                // Check if the current user is the creator of this form or has org permission
                 if (function_exists('auth') && auth()->isLoggedIn()) {
                     $currentUser = auth()->getUser();
-                    $isOwnForm = ($formCreator === $currentUser['_id'] || $currentUser['role'] === 'admin');
+                    $canEditThisForm = false;
+
+                    if (isset($formData['organization_id']) && !empty($formData['organization_id'])) {
+                        // Organizational form
+                        $dbPath = ROOT_DIR . '/db';
+                        try {
+                            $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                            $membership = $orgMembersStore->findOneBy([
+                                ['organization_id', '=', $formData['organization_id']],
+                                'AND',
+                                ['user_id', '=', $currentUser['_id']]
+                            ]);
+                            if ($membership && in_array($membership['organization_role'], ['organization_owner', 'organization_admin', 'organization_member'])) {
+                                $canEditThisForm = true;
+                            }
+                        } catch (\Exception $e) {
+                            // Log error if needed, but don't block, fallback to other checks
+                            error_log("Error checking org membership in builder.php: " . $e->getMessage());
+                        }
+                    } else {
+                        // Personal form
+                        if ($formCreator === $currentUser['_id']) {
+                            $canEditThisForm = true;
+                        }
+                    }
+
+                    // System admin can always edit
+                    if (auth()->hasRole(Auth::ROLE_ADMIN)) {
+                        $canEditThisForm = true;
+                    }
+                    $isOwnForm = $canEditThisForm; // Use $isOwnForm for consistency with existing checks
                 }
             }
         }
@@ -348,6 +378,8 @@ ob_start();
     </div>
 
     <div id='button-container'>
+        <input type="hidden" id="formType" value="<?php echo isset($_GET['type']) ? htmlspecialchars($_GET['type']) : ''; // Retaining for now, though new logic uses formContext ?>">
+        <input type="hidden" id="formContext" value="<?php echo isset($_GET['form_context']) ? htmlspecialchars($_GET['form_context']) : ''; ?>">
         <?php if ($editMode && $isOwnForm): ?>
             <input type="hidden" id="editingForm" value="<?php echo htmlspecialchars($_GET['f']); ?>">
             <input type="hidden" id="editMode" value="true">

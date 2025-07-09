@@ -697,6 +697,25 @@ body.dark-mode .text-muted {
     background-color: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* API Builder/Caller Specific Dark Mode Fixes */
+body.dark-mode .form-text {
+    color: #adb5bd; /* A lighter gray, commonly used for muted text in Bootstrap dark themes */
+}
+
+body.dark-mode #livePreviewSampleInputsContainer {
+    background-color: #2d2d2d !important; /* Match other form control backgrounds */
+    border-color: #444 !important; /* Match other form control borders */
+    color: #e0e0e0; /* Ensure text inside is light */
+}
+
+body.dark-mode #livePreviewSampleInputsContainer .form-label-sm {
+    color: #ced4da; /* Lighter label color for small labels */
+}
+
+body.dark-mode #livePreviewSampleInputsContainer .text-muted {
+    color: #888 !important; /* Ensure placeholder text is also muted correctly */
+}
 .dark-mode #formWidthSlider::-ms-track {
     background-color: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.1);

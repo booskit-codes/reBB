@@ -5,6 +5,7 @@
  * This file handles the backend ajax calls.
  */
 header('Content-Type: application/json');
+require_once ROOT_DIR . '/core/bbcode_engine.php'; // Ensure BbcodeEngine class is loaded
 
 // Make sure constants are defined
 if (!defined('MAX_REQUESTS_PER_HOUR')) {
@@ -268,7 +269,9 @@ if ($requestType === 'schema') {
     $isEditMode = isset($requestData['editMode']) && $requestData['editMode'] === true;
     $editingFormId = isset($requestData['editingForm']) ? $requestData['editingForm'] : '';
     $builderType = isset($requestData['builder']) ? $requestData['builder'] : '';
-    
+    $formTypeParam = isset($requestData['form_type']) ? $requestData['form_type'] : '';
+    $formContextParam = isset($requestData['form_context']) ? $requestData['form_context'] : ''; // Get the form_context
+
     $createdBy = null;
     $verified = false;
     if(auth()->isLoggedIn()) {
@@ -338,10 +341,39 @@ if ($requestType === 'schema') {
         
         $currentUser = auth()->getUser();
         $formCreator = isset($existingFormData['createdBy']) ? $existingFormData['createdBy'] : null;
-        
-        if ($formCreator !== $currentUser['_id'] && $currentUser['role'] !== 'admin') {
-            logAttempt('Unauthorized edit attempt for form: ' . $editingFormId . ' by user: ' . $currentUser['username']);
-            echo json_encode(['success' => false, 'error' => 'You do not have permission to edit this form.']);
+        $canSaveChanges = false;
+
+        if (isset($existingFormData['organization_id']) && !empty($existingFormData['organization_id'])) {
+            // Organizational form
+            $dbPath = ROOT_DIR . '/db';
+            try {
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $membership = $orgMembersStore->findOneBy([
+                    ['organization_id', '=', $existingFormData['organization_id']],
+                    'AND',
+                    ['user_id', '=', $currentUser['_id']]
+                ]);
+                if ($membership && in_array($membership['organization_role'], ['organization_owner', 'organization_admin', 'organization_member'])) {
+                    $canSaveChanges = true;
+                }
+            } catch (\Exception $e) {
+                logAttempt("Error checking org membership in ajax.php for edit: " . $e->getMessage());
+            }
+        } else {
+            // Personal form
+            if ($formCreator === $currentUser['_id']) {
+                $canSaveChanges = true;
+            }
+        }
+
+        // System admin can always edit
+        if (auth()->hasRole(Auth::ROLE_ADMIN)) {
+            $canSaveChanges = true;
+        }
+
+        if (!$canSaveChanges) {
+            logAttempt('Unauthorized save attempt for form: ' . $editingFormId . ' by user: ' . $currentUser['username']);
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to save changes to this form.']);
             exit;
         }
 
@@ -474,6 +506,39 @@ if ($requestType === 'schema') {
         // Log successful update
         logAttempt("Successful form update - Form ID: $editingFormId by user: " . ($currentUser['username'] ?? 'Unknown'), false);
         
+        // Organizational logic for edited forms
+        // If an edited form is part of an organization, its organization_id should persist.
+        // The main change here is IF the form_context indicates it's an org form, ensure it has an org ID.
+        // However, editing usually means the form already exists with its context.
+        // For now, we don't change organization_id during edit, but ensure org name can be updated if the form *is* the org definition form.
+        if ($formTypeParam === 'organization' && auth()->isLoggedIn()) { // This condition checks if the form ITSELF IS an organization's defining form
+            try {
+                $orgDbPath = ROOT_DIR . '/db';
+                $organizationsStore = new \SleekDB\Store('organizations', $orgDbPath, ['auto_cache' => false, 'timeout' => false]);
+                $orgData = $organizationsStore->findOneBy(['form_id', '=', $editingFormId]);
+                if ($orgData && $orgData['organization_name'] !== $formName) {
+                    $organizationsStore->updateById($orgData['_id'], ['organization_name' => $formName, 'updated_at' => time()]);
+                    logAttempt("Organization name updated for org ID: {$orgData['_id']} via form edit: $editingFormId");
+                }
+            } catch (\Exception $e) {
+                logAttempt("Error updating organization name during form edit: " . $e->getMessage());
+            }
+        }
+        // If form_context is 'organization' during an edit, ensure the schema file *retains* its organization_id
+        // This is more of a safeguard, as it should already be there.
+        if ($formContextParam === 'organization' && auth()->isLoggedIn() && file_exists($existingFilename)) {
+            $schemaContent = json_decode(file_get_contents($existingFilename), true);
+            if (isset($schemaContent['organization_id'])) {
+                // Good, it's there. If we wanted to update it (e.g. user changed orgs and is re-assigning form - out of scope)
+                // we would do it here. For now, just ensure it's preserved by re-adding it to the $fileContent before saving.
+                 $fileDataToSave = json_decode($fileContent, true); // $fileContent is the new data to be saved
+                 $fileDataToSave['organization_id'] = $schemaContent['organization_id'];
+                 $fileContent = json_encode($fileDataToSave, JSON_PRETTY_PRINT);
+                 // This $fileContent is then written by file_put_contents a few lines above this block in original code
+            }
+        }
+
+
         // Return success response with original form ID
         echo json_encode([
             'success' => true,
@@ -601,8 +666,51 @@ if ($requestType === 'schema') {
         $userInfo = auth()->isLoggedIn() ? " by user: " . auth()->getUser()['username'] : "";
         logAttempt("Successful form schema submission - Form ID: $randomString$userInfo", false);
         
-        $responseData = json_decode($fileContent, true);
+        $organizationIdToEmbed = null;
+
+        // === Logic for associating new form with an Organization via form_context ===
+        if ($formContextParam === 'organization' && auth()->isLoggedIn()) {
+            $currentUserId = auth()->getUser()['_id'];
+            $orgDbPath = ROOT_DIR . '/db';
+            try {
+                $userOrgLinkStore = new \SleekDB\Store('user_to_organization_links', $orgDbPath, ['auto_cache' => false, 'timeout' => false]);
+                $existingLink = $userOrgLinkStore->findOneBy(['user_id', '=', $currentUserId]);
+
+                if ($existingLink && isset($existingLink['organization_id'])) {
+                    $organizationIdToEmbed = $existingLink['organization_id'];
+
+                    // Update the form's schema JSON file with organization_id
+                    // $filename is the path to the _schema.json file
+                    $schemaData = json_decode(file_get_contents($filename), true);
+                    $schemaData['organization_id'] = $organizationIdToEmbed;
+                    if(file_put_contents($filename, json_encode($schemaData, JSON_PRETTY_PRINT))) {
+                        logAttempt("Form ID: $randomString associated with Organization ID: $organizationIdToEmbed for User ID: $currentUserId", false);
+                    } else {
+                        logAttempt("ERROR: Failed to write organization_id to schema for Form ID: $randomString", true);
+                        // Potentially throw an error or handle this failure case
+                    }
+                } else {
+                    logAttempt("User ID: $currentUserId tried to create form with context 'organization' but is not linked to an organization.", true);
+                    // Optionally, could return an error to the user here, but for now, form is created without org link.
+                }
+            } catch (\Exception $e) {
+                logAttempt("Error associating form with organization: " . $e->getMessage());
+            }
+        }
+        // === End Form Association with Organization Logic ===
+
+        // Note: The original $formTypeParam === 'organization' block was for creating an Organization entity itself
+        // through the builder. This logic is now superseded by the dedicated creation form on management.php.
+        // If $formTypeParam had other uses, they should be reviewed. For now, new organization *entities* aren't made here.
+
+        $responseData = json_decode($fileContent, true); // $fileContent is the original content written to disk
         $responseData['formId'] = $randomString; // Add formId to the response
+
+        // If an organizationId was embedded, add it to the response as well
+        if ($organizationIdToEmbed) {
+            $responseData['organization_id'] = $organizationIdToEmbed;
+        }
+
         echo json_encode($responseData);
         exit;
     }
@@ -904,6 +1012,182 @@ if ($requestType === 'schema') {
             exit;
     }
     exit;
+} elseif ($requestType === 'save_api_schema') {
+    // Ensure user is logged in (optional, depending on requirements)
+    // if (!auth()->isLoggedIn()) {
+    //     logAttempt('Unauthorized API schema save attempt');
+    //     echo json_encode(['success' => false, 'error' => 'Authentication required to save API schemas.']);
+    //     exit;
+    // }
+
+    $userProvidedApiName = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // This is the display name
+    $mainBbcodeTemplate = isset($requestData['main_bbcode_template']) ? $requestData['main_bbcode_template'] : '';
+    $fields = isset($requestData['fields']) && is_array($requestData['fields']) ? $requestData['fields'] : [];
+
+    if (empty($userProvidedApiName)) {
+        logAttempt('API schema save attempt with empty API display name.');
+        echo json_encode(['success' => false, 'error' => 'API Name (for display) is required.']);
+        exit;
+    }
+
+    // User provided name can be more flexible, but we'll still use a sanitized version for {api_name} if needed.
+    // For now, the internal 'api_name' for replacement will be the user-provided one.
+    $internalApiName = $userProvidedApiName;
+
+
+    if (empty($fields)) {
+        logAttempt('API schema save attempt with no fields for API: ' . $userProvidedApiName);
+        echo json_encode(['success' => false, 'error' => 'At least one field is required for the API.']);
+        exit;
+    }
+
+    $cleanedFields = [];
+    foreach ($fields as $field) {
+        if (isset($field['name']) && !empty(trim($field['name']))) {
+            $fieldName = strtolower(trim($field['name']));
+            $fieldName = preg_replace('/[^a-z0-9_]+/', '_', $fieldName);
+            $fieldName = trim($fieldName, '_');
+
+            if (empty($fieldName)) {
+                continue;
+            }
+
+            $cleanedFields[] = [
+                'name' => $fieldName, // This is the slug used for {placeholder}
+                'individual_wrapper' => isset($field['individual_wrapper']) ? $field['individual_wrapper'] : '{field_value}',
+                'is_multi_entry' => isset($field['is_multi_entry']) ? filter_var($field['is_multi_entry'], FILTER_VALIDATE_BOOLEAN) : false,
+                'multi_start_wrapper' => isset($field['multi_start_wrapper']) ? $field['multi_start_wrapper'] : '',
+                'multi_end_wrapper' => isset($field['multi_end_wrapper']) ? $field['multi_end_wrapper'] : ''
+            ];
+        }
+    }
+
+    if (empty($cleanedFields)) {
+        logAttempt('API schema save attempt with no valid fields after cleaning for API: ' . $userProvidedApiName);
+        echo json_encode(['success' => false, 'error' => 'No valid fields provided. Each field must have a valid name.']);
+        exit;
+    }
+
+    // Generate random string for filename
+    $randomString = bin2hex(random_bytes(8)); // Creates a 16-character hex string
+    $apiIdentifier = 'api_' . $randomString;
+
+    $apiSchema = [
+        'api_identifier' => $apiIdentifier,
+        'display_name' => $userProvidedApiName,
+        'api_name_placeholder' => $apiIdentifier, // Use the unique api_identifier for the {api_name} wildcard
+        'main_bbcode_template' => $mainBbcodeTemplate,
+        'fields' => $cleanedFields,
+        'created_at' => time(),
+        'updated_at' => time(),
+        // 'created_by' => auth()->isLoggedIn() ? auth()->getUser()['_id'] : 'guest'
+    ];
+
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
+    if (!is_dir($apisDir)) {
+        if (!mkdir($apisDir, 0755, true)) {
+            logAttempt('Failed to create apis directory: ' . $apisDir);
+            echo json_encode(['success' => false, 'error' => 'Server error: Could not create API storage.']);
+            exit;
+        }
+    }
+
+    // Use the new identifier for the filename
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+
+    // We assume new APIs don't overwrite based on random name, but a duplicate random is astronomically small.
+    // If it were to happen, file_put_contents would overwrite. A loop with file_exists could prevent this if necessary.
+
+    if (file_put_contents($apiFilename, json_encode($apiSchema, JSON_PRETTY_PRINT))) {
+        logAttempt('Successfully saved API schema: ' . $userProvidedApiName . ' with ID: ' . $apiIdentifier . ' to ' . $apiFilename, false);
+        echo json_encode(['success' => true, 'message' => 'API schema saved successfully!', 'api_identifier' => $apiIdentifier, 'display_name' => $userProvidedApiName]);
+    } else {
+        logAttempt('Failed to write API schema to file: ' . $apiFilename);
+        echo json_encode(['success' => false, 'error' => 'Server error: Could not save API schema.']);
+    }
+    exit;
+
+} elseif ($requestType === 'get_api_schema_details') { // New action to fetch schema for api_caller.js
+    $apiIdentifier = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // api_name from JS is the api_identifier
+
+    if (empty($apiIdentifier)) {
+        logAttempt('API schema detail request with empty API identifier.');
+        echo json_encode(['success' => false, 'error' => 'API Identifier is required.']);
+        exit;
+    }
+    // Validate api_identifier format (api_ followed by hex, matching generation)
+    if (!preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+        logAttempt('API schema detail request with invalid API identifier format: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Identifier format.']);
+        exit;
+    }
+
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+
+    if (!file_exists($apiFilename)) {
+        logAttempt('API schema detail request for non-existent API: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'API schema not found.']);
+        exit;
+    }
+
+    $schemaContent = file_get_contents($apiFilename);
+    $schemaData = json_decode($schemaContent, true);
+
+    if ($schemaData === null) {
+        logAttempt('Failed to decode API schema JSON for: ' . $apiIdentifier); // Corrected variable
+        echo json_encode(['success' => false, 'error' => 'Error reading API schema.']);
+        exit;
+    }
+    logAttempt('Successfully fetched API schema details for: ' . $apiIdentifier, false); // Corrected variable
+    echo json_encode(['success' => true, 'schema' => $schemaData]);
+    exit;
+
+} elseif ($requestType === 'generate_api_bbcode') {
+    $apiIdentifier = isset($requestData['api_name']) ? trim($requestData['api_name']) : null; // api_name from JS is the api_identifier
+    $fieldValues = isset($requestData['field_values']) && is_array($requestData['field_values']) ? $requestData['field_values'] : [];
+
+    if (empty($apiIdentifier)) {
+        logAttempt('BBCode generation request with empty API identifier.');
+        echo json_encode(['success' => false, 'error' => 'API Identifier is required.']);
+        exit;
+    }
+    if (!preg_match('/^api_[a-f0-9]{16}$/', $apiIdentifier)) {
+        logAttempt('BBCode generation request with invalid API identifier format: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'Invalid API Identifier format.']);
+        exit;
+    }
+
+    $apisDir = STORAGE_DIR . '/apis'; // Changed to STORAGE_DIR
+    $apiFilename = $apisDir . '/' . $apiIdentifier . '.json';
+
+    if (!file_exists($apiFilename)) {
+        logAttempt('BBCode generation request for non-existent API: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'API schema not found.']);
+        exit;
+    }
+
+    $schemaContent = file_get_contents($apiFilename);
+    $schemaData = json_decode($schemaContent, true);
+
+    // Check for the new main_bbcode_template and overall structure
+    if ($schemaData === null || !isset($schemaData['main_bbcode_template']) || !isset($schemaData['fields']) || !is_array($schemaData['fields'])) {
+        logAttempt('Error reading or invalid structure in API schema JSON for: ' . $apiIdentifier);
+        echo json_encode(['success' => false, 'error' => 'Error reading API schema or schema is malformed. Check main_bbcode_template and fields.']);
+        exit;
+    }
+
+    try {
+        $finalBbcode = BbcodeEngine::generateBbcodeForApi($schemaData, $fieldValues);
+        logAttempt('Successfully generated BBCode for API: ' . $apiIdentifier, false);
+        echo json_encode(['success' => true, 'bbcode' => $finalBbcode]);
+    } catch (Exception $e) {
+        http_response_code(500); // Should already be caught by engine, but as a fallback
+        error_log("Error during BBCode generation for API " . $apiIdentifier . " in AJAX: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error: Could not generate BBCode due to a server error.']);
+    }
+    exit;
+
 } else {
     logAttempt('Invalid request type: ' . $requestType);
     echo json_encode(['success' => false, 'error' => 'Invalid request type.']);

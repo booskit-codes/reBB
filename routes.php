@@ -153,19 +153,46 @@ if(ENABLE_AUTH) {
         
         if (file_exists($filename)) {
             $formData = json_decode(file_get_contents($filename), true);
+            $formData = json_decode(file_get_contents($filename), true);
             $currentUser = auth()->getUser();
-            
-            // Check if form has a createdBy field and if it matches the current user
-            // Admin users can edit any form
-            if (isset($formData['createdBy']) && $formData['createdBy'] === $currentUser['_id'] || 
-                $currentUser['role'] === 'admin') {
-                // User has permission to edit, redirect to builder with edit mode
+            $canEdit = false;
+
+            if (isset($formData['organization_id']) && !empty($formData['organization_id'])) {
+                // This is an organizational form
+                $dbPath = ROOT_DIR . '/db';
+                $orgMembersStore = new \SleekDB\Store('organization_members', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                $membership = $orgMembersStore->findOneBy([
+                    ['organization_id', '=', $formData['organization_id']],
+                    'AND',
+                    ['user_id', '=', $currentUser['_id']]
+                ]);
+
+                if ($membership) {
+                    $orgRole = $membership['organization_role'];
+                    if (in_array($orgRole, ['organization_owner', 'organization_admin', 'organization_member'])) {
+                        $canEdit = true;
+                    }
+                }
+            } else {
+                // This is a personal form
+                if (isset($formData['createdBy']) && $formData['createdBy'] === $currentUser['_id']) {
+                    $canEdit = true;
+                }
+            }
+
+            // System admin can always edit
+            if (auth()->hasRole(Auth::ROLE_ADMIN)) {
+                $canEdit = true;
+            }
+
+            if ($canEdit) {
                 $_GET['edit_mode'] = 'true';
                 view('builder');
             } else {
-                // User doesn't have permission to edit this form
                 http_response_code(403);
-                echo '<div class="alert alert-danger">You do not have permission to edit this form.</div>';
+                // It's better to have a proper error page rendering function.
+                // view('errors/403', ['message' => 'You do not have permission to edit this form.']);
+                echo "<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>You do not have permission to edit this form.</p><p><a href='" . site_url('') . "'>Go to Homepage</a></p></body></html>";
             }
         } else {
             // Form not found
@@ -178,9 +205,29 @@ if(ENABLE_AUTH) {
 // ===================================
 // API Routes
 // ===================================
+// API Builder page
+get('/api_builder', function() {
+    view('api_builder');
+});
+
+// API Caller page (defining it here for when it's created)
+get('/api_caller', function() {
+    view('api_caller');
+});
+
 // AJAX endpoint for form operations
 any('/ajax', function() {
     view('ajax');
+});
+
+// Public API execution endpoint
+get('/api/call/:api_identifier', function($params) {
+    // Pass the api_identifier to the view script via $_GET, similar to other routes
+    // The execute_api.php script will then handle loading and processing.
+    if (isset($params['api_identifier'])) {
+        $_GET['id'] = $params['api_identifier'];
+    }
+    view('execute_api');
 });
 
 // ===================================
@@ -200,6 +247,12 @@ if(ENABLE_AUTH) {
     // List management
     any('/lists', function() {
         view('user/lists');
+    });
+
+    // Organization Management page
+    any('/organization/management', function() {
+        auth()->requireAuth('login'); // Ensure user is logged in
+        view('organization/management');
     });
 }
 
@@ -235,6 +288,23 @@ if(ENABLE_AUTH) {
     // Analytics dashboard
     any('/analytics', function() {
         view('admin/analytics');
+    });
+
+    // Manage Organizations page
+    any('/admin/organizations', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN, 'login');
+        view('admin/organizations');
+    });
+
+    // Admin Form JSON Editor page
+    any('/admin/forms/edit-json', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN, 'login'); // Expects ?form_id=XYZ
+        view('admin/form_json_editor');
+    });
+
+    get('/admin/apis', function() {
+        auth()->requireRole(Auth::ROLE_ADMIN); // Ensure admin role
+        view('admin/manage_apis');
     });
 }
 

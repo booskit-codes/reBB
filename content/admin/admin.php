@@ -30,6 +30,10 @@ if (isset($_GET['logs']) && !empty($_GET['logs'])) {
             $logFile = STORAGE_DIR . '/logs/documentation_activity.log';
             $logTitle = 'Documentation Activity Logs';
             break;
+        case 'organization':
+            $logFile = STORAGE_DIR . '/logs/organization_activity.log';
+            $logTitle = 'Organization Activity Logs';
+            break;
         default:
             // Invalid log type, redirect back to admin
             redirect('admin');
@@ -488,9 +492,12 @@ ob_start();
         <h1>Admin Dashboard</h1>
         <div>
             <span class="text-muted me-3">Welcome, <?php echo htmlspecialchars($currentUser['username']); ?></span>
-            <a href="<?php echo site_url('analytics'); ?>" class="btn btn-primary"><i class="bi bi-graph-up"></i> Analytics</a>
-            <a href="<?php echo site_url('admin/lists'); ?>" class="btn btn-outline-primary"><i class="bi bi-collection"></i> User Lists</a>
-            <a href="<?php echo site_url('admin/directory'); ?>" class="btn btn-outline-warning"><i class="bi bi-clipboard"></i> Public Directory</a>
+            <a href="<?php echo site_url('analytics'); ?>" class="btn btn-primary me-2"><i class="bi bi-graph-up"></i> Analytics</a>
+            <a href="<?php echo site_url('admin/users'); ?>" class="btn btn-info me-2"><i class="bi bi-people-fill"></i> Manage Users</a>
+            <a href="<?php echo site_url('admin/organizations'); ?>" class="btn btn-warning me-2"><i class="bi bi-diagram-3-fill"></i> Manage Orgs</a>
+            <a href="<?php echo site_url('admin/lists'); ?>" class="btn btn-outline-primary me-2"><i class="bi bi-collection"></i> User Lists</a>
+            <a href="<?php echo site_url('admin/directory'); ?>" class="btn btn-outline-secondary me-2"><i class="bi bi-clipboard"></i> Public Directory</a>
+            <a href="<?php echo site_url('admin/apis'); ?>" class="btn btn-dark me-2"><i class="bi bi-hdd-stack"></i> Manage APIs</a> <!-- New Button -->
             <a href="?" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
             <a href="<?php echo site_url('logout'); ?>" class="btn btn-outline-danger"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>
@@ -560,7 +567,7 @@ ob_start();
             </div>
         </div>
         
-        <div class="col-md-6 mb-3 mb-md-0">
+        <div class="col-md-6 mb-3 mb-md-0"> <!-- Reverted to col-md-6 for a 2-card row -->
             <div class="card h-100">
                 <div class="card-header">
                     <h4 class="mb-0">System Logs</h4>
@@ -576,6 +583,9 @@ ob_start();
                         </a>
                         <a href="?logs=docs" class="btn btn-info log-button" target="_blank">
                             <i class="bi bi-file-text"></i> Docs Logs
+                        </a>
+                        <a href="?logs=organization" class="btn btn-info log-button" target="_blank">
+                            <i class="bi bi-file-text"></i> Organization Logs
                         </a>
                     </div>
                 </div>
@@ -747,6 +757,9 @@ ob_start();
                                                 data-formname="<?php echo htmlspecialchars($form['name'] ?: 'Unnamed Form'); ?>">
                                             <i class="bi bi-trash"></i> Delete
                                         </button>
+                                        <a href="<?php echo site_url('admin/forms/edit-json?form_id=') . htmlspecialchars($form['id']); ?>" class="btn btn-sm btn-outline-warning ms-1" title="Edit JSON">
+                                            <i class="bi bi-filetype-json"></i>
+                                        </a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

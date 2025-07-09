@@ -23,9 +23,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     } else {
         // Attempt login
         if (auth()->login($username, $password)) {
-            // Check for redirect URL
-            $redirect = isset($_SESSION['auth_redirect']) ? $_SESSION['auth_redirect'] : site_url('profile');
-            unset($_SESSION['auth_redirect']);
+            $user = auth()->getUser();
+            $defaultRedirect = site_url('profile'); // Default for regular users
+
+            if ($user && $user['role'] === Auth::ROLE_ORGANIZATION_USER) {
+                // For organization_user, try to redirect to their organization page.
+                // Need to check if they are linked to an organization.
+                $dbPath = ROOT_DIR . '/db';
+                try {
+                    $userOrgStore = new \SleekDB\Store('user_to_organization_links', $dbPath, ['auto_cache' => false, 'timeout' => false]);
+                    $orgLink = $userOrgStore->findOneBy(['user_id', '=', $user['_id']]);
+                    if ($orgLink && isset($orgLink['organization_id'])) {
+                        $defaultRedirect = site_url('organization/management');
+                    } else {
+                        // Edge Case: Org user not linked to any org. Log them out with an error.
+                        auth()->logout(); // Clean up session
+                        $_SESSION['login_error'] = 'Your organization account is not properly configured. Please contact support.';
+                        header("Location: " . site_url('login')); // Redirect back to login with error
+                        exit;
+                    }
+                } catch (\Exception $e) {
+                    // Database error, log out with a generic error
+                    auth()->logout();
+                    $_SESSION['login_error'] = 'A database error occurred during login. Please try again later.';
+                    error_log("Error fetching org link for org user: " . $e->getMessage());
+                    header("Location: " . site_url('login'));
+                    exit;
+                }
+            }
+
+            // Check for a previously intended redirect URL, otherwise use the role-based default
+            $redirect = isset($_SESSION['auth_redirect']) ? $_SESSION['auth_redirect'] : $defaultRedirect;
+            unset($_SESSION['auth_redirect']); // Clear the stored redirect
+
             header("Location: " . $redirect);
             exit;
         } else {
@@ -45,7 +75,13 @@ $csrfToken = auth()->generateCsrfToken();
                 <h3 class="mb-0">Login</h3>
             </div>
             <div class="card-body">
-                <?php if ($error): ?>
+                <?php
+                if (isset($_SESSION['login_error'])) {
+                    $error = $_SESSION['login_error'];
+                    unset($_SESSION['login_error']);
+                }
+                if ($error):
+                ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
                 

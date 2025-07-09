@@ -7,7 +7,8 @@
  */
 
 // Require authentication before processing anything else
-auth()->requireAuth('login');
+auth()->requireAuth('login'); // Ensures user is logged in
+auth()->requireMinRole(Auth::ROLE_USER); // Ensures user is at least a 'user'
 
 // Since we've passed the auth check, we can safely get the current user
 $currentUser = auth()->getUser();
@@ -155,6 +156,9 @@ ob_start();
             </a>
             <a href="<?php echo site_url('lists'); ?>" class="btn btn-outline-primary me-2">
                 <i class="bi bi-collection"></i> Form Lists
+            </a>
+            <a href="<?php echo site_url('organization/management'); ?>" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-diagram-3"></i> Organization Management
             </a>
             <a href="<?php echo site_url('account'); ?>" class="btn btn-outline-info me-2">
                 <i class="bi bi-gear"></i> Account Settings

@@ -21,11 +21,20 @@ ob_start();
                 <a href="<?php echo site_url('login'); ?>" class="btn btn-outline-light">
                     <i class="bi bi-person"></i> Login
                 </a>
+                <?php else:
+                    $user = auth()->getUser();
+                    $username = htmlspecialchars($user['username']);
+                    if ($user['role'] === Auth::ROLE_ORGANIZATION_USER):
+                ?>
+                    <a href="<?php echo site_url('organization/management'); ?>" class="btn btn-outline-light">
+                        <i class="bi bi-diagram-3"></i> <?php echo $username; ?> (Org)
+                    </a>
                 <?php else: ?>
-                <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-light">
-                    <i class="bi bi-person-circle"></i> <?php echo htmlspecialchars(auth()->getUser()['username']); ?>
-                </a>
-                <?php endif ?>
+                    <a href="<?php echo site_url('profile'); ?>" class="btn btn-outline-light">
+                        <i class="bi bi-person-circle"></i> <?php echo $username; ?>
+                    </a>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -76,9 +85,12 @@ ob_start();
                                 <small>Simplified building experience</small>
                             </a>
                         </div>
-                        <div class="directory-button-container">
-                            <a href="<?php echo site_url('directory'); ?>" class="btn btn-outline-secondary btn-directory">
+                        <div class="d-flex justify-content-between mt-2"> <!-- Flex container for side-by-side buttons -->
+                            <a href="<?php echo site_url('directory'); ?>" class="btn btn-outline-secondary btn-directory btn-action-common-size">
                                 <i class="bi bi-collection"></i> Browse Public Directory
+                            </a>
+                            <a href="<?php echo site_url('api_builder'); ?>" class="btn btn-info btn-directory btn-action-common-size">
+                                <i class="bi bi-gear-wide-connected"></i> Create an API
                             </a>
                         </div>
                     </div>
