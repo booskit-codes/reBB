@@ -205,6 +205,10 @@ if(ENABLE_AUTH) {
 // ===================================
 // API Routes
 // ===================================
+// AJAX endpoint for form operations
+any('/ajax', function() {
+    view('ajax');
+});
 // API Builder page
 if(ENABLE_API_SYSTEM) {
     get('/api_builder', function() {
@@ -214,11 +218,6 @@ if(ENABLE_API_SYSTEM) {
     // API Caller page (defining it here for when it's created)
     get('/api_caller', function() {
         view('api_caller');
-    });
-
-    // AJAX endpoint for form operations
-    any('/ajax', function() {
-        view('ajax');
     });
 
     // Public API execution endpoint
